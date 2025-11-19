@@ -1,6 +1,6 @@
 When the game asks you to enter a code enter this:
 
-0103232017
+0111192025
 
 it should be registered after this, you will most likely
 have to restart the game for it to take effect.

@@ -1,3 +1,5 @@
+rem zs_functions.dba
+rem updated
 
 rem make buttons for commands
 function makebutton_ext(x,y,desc$,tooltip1$)
@@ -11,7 +13,7 @@ function makebutton_ext(x,y,desc$,tooltip1$)
    endif
    if buttonpressed=1
       set text opaque
-      if tooltip1$<>"" then space1$="                                   "
+      space1$="                                          "
       ink rgb(192,0,192),1 : text 30,332,tooltip1$+space1$
       set text transparent : ink rgb(64,64,64),0
    endif
@@ -32,7 +34,7 @@ function makeheading(x,y,desc$,hdng$)
    if headingpressed=1
       set text opaque
       ink rgb(192,0,192),1
-      text 30,332,"* Adjust heading to "+hdng$+" degrees *"
+      text 30,332,"* Adjust heading to "+hdng$+" degrees *   "
       set text transparent : ink rgb(64,64,64),0
    endif
    set text size 8: center text x,y-7,desc$
@@ -51,7 +53,7 @@ function makespeed(x,y,desc$,tooltip2$)
    endif
    if speedpressed=1
       set text opaque
-      if tooltip2$<>"" then space2$="                                   "
+      space2$="                                          "
       ink rgb(192,0,192),1 : text 30,332,tooltip2$+space2$
       set text transparent : ink rgb(64,64,64),0
    endif
@@ -204,6 +206,17 @@ breakloop:
 show mouse
 endfunction
 
+` *=---------------------------------------------------------------------=*
+`                  >> Convert Timer to Hours/Mins/Seconds <<
+` *=---------------------------------------------------------------------=*
+`
+`  This fucnction will convert a milli seconds timer value into digital
+` time format.  This version supports Hours/Minutes and Seconds.
+`
+`
+` *=---------------------------------------------------------------------=*
+
+
 Function Convert_Timer_To_HMS(ticks,format)
 
     Seconds=ticks/1000
@@ -224,6 +237,18 @@ Function Convert_Timer_To_HMS(ticks,format)
 
 EndFunction result$
 
+
+` *=---------------------------------------------------------------------=*
+`                     >> Convert Timer to Mins/Seconds <<
+` *=---------------------------------------------------------------------=*
+`
+`  This fucnction will convert a milli seconds timer value into digital
+` time format.  This version supports Minutes and Seconds.
+`
+`
+` *=---------------------------------------------------------------------=*
+
+
 Function Convert_Timer_To_MS(ticks,format)
 
     Seconds=ticks/1000
@@ -239,6 +264,8 @@ Function Convert_Timer_To_MS(ticks,format)
       endif
 
 EndFunction result$
+
+
 
 function Mod(Val1,val2)
     result=val1-((val1/val2)*val2)

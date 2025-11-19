@@ -1,6 +1,6 @@
 Rem * Title  : CharTrek-TFO (the first one)
 Rem * Author : David Scouten
-Rem * Date   : 03-23-2017
+Rem * Date   : 11-19-2025
 
 #include "..\zs_functions.dba"
 
@@ -33,7 +33,7 @@ time1=4000 : time2=2000 : time3=200
 
 rem init strings
 playername$="Player" : gamerank$="Ensign"
-shield$="Down" : regged$="Demo" : regcode$="0103232017" : gvers$="v0.1.0323a"
+shield$="Down" : regged$="Demo" : regcode$="0111192025" : gvers$="v0.1.1119a"
 regflag=0 : startup=1 : minleft=30
 
 rem load debug values
@@ -1992,3 +1992,5 @@ data ".",".",".",".",".",".",".",".",".","."
 data ".",".",".",".",".",".",".",".",".","."
 data ".",".",".",".",".",".",".",".",".","."
 data ".",".",".",".",".",".",".",".",".","."
+
+rem end of file
