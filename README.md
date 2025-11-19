@@ -9,3 +9,5 @@ For compatibility in Windows 11, please right-click the compiled EXE and make su
 
 If you wish to compile these source files you will need to locate and download DarkBasic v1.14 (current)
 https://underwaredesign.com/forums/index.php?topic=4626.0
+OR
+https://archive.org/details/904_20210704
