@@ -1,0 +1,272 @@
+rem zs_functions.dba
+rem updated
+
+rem make buttons for commands
+function makebutton_ext(x,y,desc$,tooltip1$)
+   buttonpressed=0
+   ink rgb(192,192,192),0 : box x-26,y-7,x+26,y+7
+   ink rgb(128,128,128),0 : box x-24,y-5,x+24,y+5
+   ink rgb(255,255,255),0
+   myx=mousex() : myy=mousey()
+   if myx>x-26 and myx<x+26
+      if myy>y-7 and myy<y+7 then buttonpressed=1
+   endif
+   if buttonpressed=1
+      set text opaque
+      space1$="                                          "
+      ink rgb(192,0,192),1 : text 30,332,tooltip1$+space1$
+      set text transparent : ink rgb(64,64,64),0
+   endif
+   set text size 8 : center text x,y-7,desc$
+   if mouseclick()=0 then buttonpressed=0
+endfunction buttonpressed
+
+rem make buttons for heading
+function makeheading(x,y,desc$,hdng$)
+   headingpressed=0
+   ink rgb(192,192,192),0 : box x-13,y-8,x+13,y+8
+   ink rgb(128,128,128),0 : box x-11,y-6,x+11,y+6
+   ink rgb(255,255,255),0
+   myx=mousex() : myy=mousey()
+   if myx>x-13 and myx<x+13
+      if myy>y-8 and myy<y+8 then headingpressed=1
+   endif
+   if headingpressed=1
+      set text opaque
+      ink rgb(192,0,192),1
+      text 30,332,"* Adjust heading to "+hdng$+" degrees *   "
+      set text transparent : ink rgb(64,64,64),0
+   endif
+   set text size 8: center text x,y-7,desc$
+   if mouseclick()=0 then headingpressed=0
+endfunction headingpressed
+
+rem make buttons for speed
+function makespeed(x,y,desc$,tooltip2$)
+   speedpressed=0
+   ink rgb(192,192,192),0 : box x-13,y-8,x+13,y+8
+   ink rgb(128,128,128),0 : box x-11,y-6,x+11,y+6
+   ink rgb(255,255,255),0
+   myx=mousex() : myy=mousey()
+   if myx>x-13 and myx<x+13
+      if myy>y-8 and myy<y+8 then speedpressed=1
+   endif
+   if speedpressed=1
+      set text opaque
+      space2$="                                          "
+      ink rgb(192,0,192),1 : text 30,332,tooltip2$+space2$
+      set text transparent : ink rgb(64,64,64),0
+   endif
+   set text size 8 : center text x,y-7,desc$
+   if mouseclick()=0 then speedpressed=0
+endfunction speedpressed
+
+rem select file function
+function selectfile(x,y,infname$)
+   selected=0 : ink rgb(0,0,255),0
+   myx=mousex() : myy=mousey()
+   if myx>x-110 and myx<x+110
+      if myy>y-8 and myy<y+8 then selected=1
+   endif
+   if selected=1 then ink rgb(0,255,255),0
+   set text size 8 : center text x,y-8,infname$
+   if mouseclick()=0 then selected=0
+endfunction selected
+
+rem make boxes for text
+function makebox(x,y,desc$)
+   ink rgb(192,192,192),0 : box x-80,y-30,x+80,y+30
+   ink rgb(128,128,128),0 : box x-78,y-28,x+78,y+28
+   ink rgb(255,255,255),0
+   set text size 8 : center text x,y-8,desc$
+endfunction
+
+rem function to move prompt down
+function inputn(ly)
+for xy = 1 to ly
+   print
+next xy
+endfunction
+
+rem make buttons for menu
+function makebutton(x,y,desc$)
+   buttonpressed=0
+   ink rgb(255,255,0),0 : box x-102,y-34,x+102,y+34
+   ink rgb(0,0,255),0 : box x-100,y-32,x+100,y+32
+   ink rgb(255,0,0),0
+   myx=mousex() : myy=mousey()
+   if myx>x-100 and myx<x+100
+      if myy>y-32 and myy<y+32 then buttonpressed=1
+   endif
+   if buttonpressed=1 then ink rgb(0,255,0),0
+   set text size 8 : center text x,y-8,desc$
+   if mouseclick()=0 then buttonpressed=0
+endfunction buttonpressed
+
+rem make buttons for everything else
+function makebutton2(x,y,desc$)
+   buttonpressed2=0
+   ink rgb(255,255,0),0 : box x-51,y-17,x+51,y+17
+   ink rgb(0,0,255),0 : box x-50,y-16,x+50,y+16
+   ink rgb(255,0,0),0
+   myx=mousex() : myy=mousey()
+   if myx>x-50 and myx<x+50
+      if myy>y-16 and myy<y+16 then buttonpressed2=1
+   endif
+   if buttonpressed2=1 then ink rgb(0,255,0),0
+   set text size 8 : center text x,y-8,desc$
+   if mouseclick()=0 then buttonpressed2=0
+endfunction buttonpressed2
+
+rem select edit variable function
+function selectvar(x,y,infname$)
+   selectedit=0 : ink rgb(0,0,255),0
+   myx=mousex() : myy=mousey()
+   if myx>x and myx<x+360
+      if myy>y-8 and myy<y+8 then selectedit=1
+   endif
+   if selectedit=1 then ink rgb(0,255,255),0
+   set text size 8 : text x,y-8,infname$
+   if mouseclick()=0 then selectedit=0
+endfunction selectedit
+
+rem function draws a box
+function drawBox(xx1,yy1,xx2,yy2)
+cls : rem 102,34,102,34
+ink rgb(255,255,0),0 : box 320-xx1,220-yy1,320+xx2,220+yy2
+ink rgb(0,0,255),0 : box 320-(xx1-2),220-(yy1-2),320+(xx2-2),220+(yy2-2)
+endfunction
+
+rem reposition mouse
+function posMouse()
+x2=0
+repeat
+   position mouse 25,25
+   x2=x2+1
+until x2=500
+endfunction
+
+rem function to input heading
+function changeHeading(hdg,snd)
+heading=hdg
+if snd=1 then play sound 5
+wait 200
+endfunction heading
+
+rem input speed or range
+function inputSpdRge(txt$,spdrge,stype)
+ink rgb(255,255,255),1
+center text 470,340,txt$
+ink rgb(0,255,0),1
+set text opaque
+if stype=0 then text 469,384,str$(spdrge)
+if stype=1 then text 464,384,"0."+str$(spdrge)
+if stype=2 then text 464,384,str$(spdrge)+".0"
+set text transparent
+endfunction
+
+rem scrolling starfield
+function starfield(c1,c2,c3)
+
+cls rgb(c1,c2,c3) : wait 100
+
+sync rate 0 : sync on
+hide mouse
+
+n=500 : dim x(n,3) : looper=0
+
+for i=1 to n
+   x(i,1)=rnd(639)+1
+   x(i,2)=rnd(479)+ 1
+   x(i,3)=rnd(9)+1
+next i
+
+do
+   cls 0
+
+   for i=1 to n
+      x(i,1)=x(i,1)-x(i,3)
+
+      if x(i,1)<=1
+         x(i,1)=640
+         x(i,2)=rnd(479)+1
+      endif
+
+   col=x(i,3)*30
+   ink rgb(col,col,col),1
+   dot x(i,1),x(i,2)
+   next i
+
+   sync
+   inc looper
+   if looper>=200 then goto breakloop
+
+loop
+breakloop:
+show mouse
+endfunction
+
+` *=---------------------------------------------------------------------=*
+`                  >> Convert Timer to Hours/Mins/Seconds <<
+` *=---------------------------------------------------------------------=*
+`
+`  This fucnction will convert a milli seconds timer value into digital
+` time format.  This version supports Hours/Minutes and Seconds.
+`
+`
+` *=---------------------------------------------------------------------=*
+
+
+Function Convert_Timer_To_HMS(ticks,format)
+
+    Seconds=ticks/1000
+    Minutes=mod((Seconds/60),60)
+    Hours=mod((seconds/3600),24)
+
+    Seconds=mod(seconds,60)
+
+    h$=Right$("00"+Str$(hours),2)
+    m$=Right$("00"+Str$(minutes),2)
+    s$=Right$("00"+Str$(seconds),2)
+
+      if format=0
+       result$=h$+":"+m$+":"+s$
+      else
+       result$=s$+":"+m$+":"+h$
+      endif
+
+EndFunction result$
+
+
+` *=---------------------------------------------------------------------=*
+`                     >> Convert Timer to Mins/Seconds <<
+` *=---------------------------------------------------------------------=*
+`
+`  This fucnction will convert a milli seconds timer value into digital
+` time format.  This version supports Minutes and Seconds.
+`
+`
+` *=---------------------------------------------------------------------=*
+
+
+Function Convert_Timer_To_MS(ticks,format)
+
+    Seconds=ticks/1000
+    Minutes=mod((Seconds/60),60)
+    Seconds=mod(seconds,60)
+    m$=Right$("00"+Str$(minutes),2)
+    s$=Right$("00"+Str$(seconds),2)
+
+      if format=0
+       result$=m$+":"+s$
+      else
+       result$=s$+":"+m$
+      endif
+
+EndFunction result$
+
+
+
+function Mod(Val1,val2)
+    result=val1-((val1/val2)*val2)
+endfunction result

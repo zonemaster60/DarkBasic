@@ -1,0 +1,1994 @@
+Rem * Title  : CharTrek-TFO (the first one)
+Rem * Author : David Scouten
+Rem * Date   : 03-23-2017
+
+#include "..\zs_functions.dba"
+
+disable escapekey
+rem set sync rate (0 = no limit)
+sync on : sync rate 60
+rem for compatibility
+set emulation on
+
+rem set font and text size
+set text font "Arial" : set text size 8
+
+rem create data, and mp3s folders
+if path exist("data")=0 then make directory "data"
+if path exist("mp3s")=0 then make directory "mp3s"
+
+rem init arrays
+dim sector$(9,9) : dim quadrant$(9,9) : dim f_name$(255)
+
+rem init variables
+shield=0 : torpedo=4 : tubes=4 : damage=0
+ix=0 : iy=0 : wx=0 : wy=0 : px=0 : py=0 : tx=0 : ty=0
+starbasex=0 : starbasey=0 : planetx=0 : planety=0
+enemydestroyed=0 : totalscore=0 : enemyflag=0
+planetvisit=0 : starbasedock=0 : wormholefound=0
+planetflag=0 : starbaseflag=0 : wormholeflag=0
+enemydamage=0 : weapon=1 : scan=0
+difficulty=1 : soundon=1 : loopon=0
+time1=4000 : time2=2000 : time3=200
+
+rem init strings
+playername$="Player" : gamerank$="Ensign"
+shield$="Down" : regged$="Demo" : regcode$="0103232017" : gvers$="v0.1.0323a"
+regflag=0 : startup=1 : minleft=30
+
+rem load debug values
+energy=1000 : hull=100 : shieldpower=100
+engines=100 : enemyhealth=100 : numcrew=400
+loaddebuglist(energy$,hull$,shieldpower$,engines$,enemyhealth$,numcrew$)
+rem load sounds
+loadsound(soundon)
+rem read config file
+loadconfig(difficulty$,playername$,gamerank$,soundon$)
+rem check for registered or demo
+gosub checkUnlockCode
+
+rem title screen
+about01(gvers$)
+if soundon=1 then play sound 6
+wait time1
+if soundon=1 then play sound 9
+starfield(192,192,192)
+
+rem the main menu
+mainMenu:
+cls rgb(96,96,96) : ink rgb(255,255,255),1
+makebutton_ext(320,16,"Menu","")
+if soundon=1 then loop sound 8
+
+do
+
+rem build buttons for commands
+if makebutton_ext(320,200,"Start!","")>0 then goto start01
+if makebutton_ext(320,218,"Help","")>0 then goto help
+if makebutton_ext(320,236,"Options","")>0 then goto options
+if makebutton_ext(320,254,"About","")>0 then goto about
+if makebutton_ext(320,272,"Exit","")>0
+   menuyes=1 : goto quit
+endif
+
+rem show game title and version
+title01(220,460,regflag,gvers$)
+
+sync : loop
+
+start01:
+rem read array data
+if soundon=1 then play sound 5
+gosub readSector : gosub readQuadrant : gosub genLevel
+numarray$="00" : load array "data\system."+numarray$+".dat",quadrant$(0)
+if soundon=1 then play sound 2
+if soundon=1 then play sound 9
+starfield(0,192,192)
+
+ix=rnd(9) : iy=rnd(9)
+if quadrant$(ix,iy)="." or quadrant$(ix,iy)<>"-[" then quadrant$(ix,iy)="=O" else quadrant$(0,0)="=O"
+
+rem set random enemies, stardate start and end
+numenemies=rnd(5*difficulty)+10 : startdate=rnd(150)+2200
+enddate=startdate+(100*numenemies) : endgame=0
+
+rem start main loop
+mainLoop:
+gosub checkEndgame
+cls rgb(96,96,96) : if soundon=1 then loop sound 8
+
+rem game version and title
+title01(450,460,regflag,gvers$)
+
+gosub displaySector : gosub displayQuadrant : gosub checkShipStatus
+
+do
+
+rem time limited demo (time = 30-minutes)
+if regflag=0
+   set text opaque
+   timeend=(timer()-timestart)
+   ink rgb(255,0,0),1
+   text 330,320,"Demo Time: "+Convert_Timer_To_MS(timeend,0)
+   if timeend>=(60000*minleft) then goto endGameNow
+   set text transparent
+endif
+
+rem alert status
+if enemyflag=0 then ink rgb(0,255,0),1
+if enemyflag=1 then ink rgb(255,0,0),1
+if enemyflag=0 and shieldpower<=50 or hull<=50 or engines<=50 then ink rgb(255,255,0),1
+box 294,90,294+30,90+13
+ink rgb(0,0,0),1 : center text 309,90,"COND"
+
+rem helm display
+ink rgb(185,185,185),1 : box 294,215,294+28,215+28
+ink rgb(0,0,0),1 : center text 309,215,"Helm"
+ink rgb(0,0,255),1
+if heading=0 then add$="00"
+if heading=45 or heading=90 then add$="0"
+center text 309,231,add$+str$(heading) : add$=""
+
+rem console (logs)
+ink rgb(0,255,0),1 : text 30,398,":> Ready."
+
+rem build buttons for commands
+if makebutton_ext(60,370,"SubLight","* Move in the current quadrant *              ")>0 then goto subMove
+if makebutton_ext(60,388,"JmpDrive","* Jump to another sector *                    ")>0 then goto jumpMove
+if makebutton_ext(116,370,"Shields","* Raise and lower ship shields *              ")>0 then goto shieldCon
+if makebutton_ext(116,388,"Transport","* Transport to a planet for minerals *        ")>0 then goto transportCon
+if makebutton_ext(172,370,"Lasers","* Fire main laser array *                     ")>0 then goto laserCon
+if makebutton_ext(172,388,"Torpedos","* Fire secondary torpedo weapon *             ")>0 then goto torpedoCon
+if makebutton_ext(228,370,"Engineer","* Make emergency repairs on ship systems *    ")>0 then goto engineerCon
+if makebutton_ext(228,388,"Docking","* Dock with a starbase for full repairs *     ")>0 then goto dockCon
+if makebutton_ext(284,370,"SRScan","* Scan the current quadrant for objects  *    ")>0 then goto srsCon
+if makebutton_ext(284,388,"LRScan","* Scan the surrounding sectors for objects *  ")>0 then goto lrsCon
+if makebutton_ext(340,370,"Tractor","* Use tractor beam to hold enemies in place * ")>0
+   if soundon=1 then play sound 5
+   ink rgb(255,0,0),1 : text 30,420,"< Not implemented yet! >"
+   wait time2 : if soundon=1 then play sound 6
+   goto mainLoop
+endif
+if makebutton_ext(340,388,"Legend","* Shows the object legend *                    ")>0 then gosub displayLegend
+if makebutton_ext(396,370,"MainMenu","* Return to the main menu *                    ")>0
+   if soundon=1 then play sound 1
+   if soundon=1 then play sound 6
+   if soundon=1 then play sound 9
+   starfield(192,0,0)
+   goto mainMenu
+endif
+if makebutton_ext(396,388,"Exit","* Exit the game now *                          ")>0
+   menuyes=0 : goto quit
+endif
+
+rem build buttons for heading
+if makeheading(559,370,"000","000")>0
+   heading=changeheading(0,soundon) : goto mainLoop
+endif
+if makeheading(589,370,"045","045")>0
+   heading=changeheading(45,soundon) : goto mainLoop
+endif
+if makeheading(589,390,"090","090")>0
+   heading=changeheading(90,soundon) : goto mainLoop
+endif
+if makeheading(589,410,"135","135")>0
+   heading=changeheading(135,soundon) : goto mainLoop
+endif
+if makeheading(559,410,"180","180")>0
+   heading=changeheading(180,soundon) : goto mainLoop
+endif
+if makeheading(529,410,"225","225")>0
+   heading=changeheading(225,soundon) : goto mainLoop
+endif
+if makeheading(529,390,"270","270")>0
+   heading=changeheading(270,soundon) : goto mainLoop
+endif
+if makeheading(529,370,"315","315")>0
+   heading=changeheading(315,soundon) : goto mainLoop
+endif
+
+if endgame=0
+   ink rgb(0,255,0),1
+   text 30,420,"EarthSpace command:"
+   text 30,436,"You have until spacedate "+str$(enddate)+" to complete your mission."
+   endgame=1 : gosub compSim : goto mainLoop
+endif
+if wormholeflag=1 then goto wormJump
+
+sync : loop
+
+rem change options and write config file
+options:
+cls rgb(96,96,96) : if soundon=1 then play sound 5
+if soundon=1 then play sound 9
+starfield(192,192,192)
+startup=0
+
+options1:
+cls rgb(96,96,96) : ink rgb(255,255,255),1
+makebutton_ext(320,16,"Options","")
+
+do
+
+buttonselected=0
+if makebutton_ext(320,200,"Difficulty","")>0 then buttonselected=1
+if makebutton_ext(320,218,"Name","")>0 then goto doname
+if makebutton_ext(320,236,"Sound","")>0 then buttonselected=3
+if makebutton_ext(320,254,"Music/MP3","")>0 then goto MP3pick
+if makebutton_ext(320,272,"Register","")>0 then goto unlock1
+if makebutton_ext(320,308,"<- Back","")>0 then goto exitoption
+
+rem difficulty options
+if buttonselected=1
+   if soundon=1 then play sound 5
+   inc difficulty : if difficulty>3 then difficulty=1
+   wait time3
+endif
+set text opaque
+select (difficulty)
+   case 1: ink rgb(255,255,0),1 : txtdiff$="Easy    " : endcase
+   case 2: ink rgb(0,255,0),1 : txtdiff$="Medium  " : endcase
+   case 3: ink rgb(255,0,0),1 : txtdiff$="Hard    " : endcase
+endselect
+text 355,194,txtdiff$
+set text transparent
+
+rem enter new name
+ink rgb(255,255,255),1 : text 355,211,playername$
+
+rem sound options
+if buttonselected=3
+   if soundon=1 then play sound 5
+   inc soundon
+   if soundon>1 then soundon=0
+   if soundon=1
+      loop sound 8 : wait time3 : goto endsound
+   endif
+   if soundon=0
+      stop sound 8 : wait time3
+   endif
+endif
+endsound:
+set text opaque
+select (soundon)
+   case 1: ink rgb(0,255,0),1 : sound$="On " : endcase
+   case 0: ink rgb(255,0,0),1 : sound$="Off" : endcase
+endselect
+text 355,229,sound$
+set text transparent
+
+sync : loop
+
+rem enter new name
+doname:
+if soundon=1 then play sound 5
+ink rgb(255,255,255),1
+new$="" : line$="" : text 267,332,"Enter new name: "
+
+do
+
+rem build the name string
+new$=entry$()
+for n1=1 to len(new$)
+   if asc(mid$(new$,n1))=8 then line$=left$(line$,len(line$)-1) else line$=line$+mid$(new$,n1)
+next n1
+clear entry buffer
+
+rem show the line
+ink rgb(255,255,255),1 : text 351,332,line$ : playername$=line$
+
+if makebutton_ext(320,460,"DONE!","")>0
+   if soundon=1 then play sound 5
+   goto options1
+endif
+
+sync : loop
+
+rem pick MP3 file
+MP3pick:
+if soundon=1 then play sound 5
+if regflag=1 and path exist("mp3s")=1
+   cd "mp3s"
+   gosub selectMP3
+   cd ".."
+else
+   ink rgb(255,0,0),1
+   center text 320,430,"This option is available in the registered version!"
+   if soundon=1 then play sound 1
+   wait time1 : if soundon=1 then play sound 6
+endif
+goto options1
+
+rem unlock game
+unlock1:
+if soundon=1 then play sound 5
+if regflag=0
+   gosub unlockGame
+else
+   if soundon=1 then play sound 13
+   ink rgb(0,255,0),1 : center text 320,416,"Thank you for registering "+playername$+"!"
+   center text 320,432,"Have a nice day. :)"
+   wait time1 : if soundon=1 then play sound 6
+endif
+gosub checkUnlockCode
+goto options1
+
+rem save the configuration
+exitoption:
+if soundon=1 then play sound 6
+difficulty$=str$(difficulty) : soundon$=str$(soundon)
+saveConfig(difficulty$,playername$,gamerank$,soundon$)
+difficulty=val(difficulty$) : soundon=val(soundon$)
+ink rgb(0,255,0),1 : center text 320,460,"The configuration was saved."
+wait time1
+if soundon=1 then play sound 9
+starfield(192,192,192)
+goto mainMenu
+
+rem move on sublight drive
+subMove:
+if soundon=1 then play sound 5
+if soundon=1 then play sound 12
+
+if energy<=1 or engines<=0
+   ink rgb(255,0,0),1
+   text 30,414,"Engineering: Sublight engines are off-line, moving on auxiliary battery power."
+   ispeed=1 : goto lowMove1
+endif
+
+ink rgb(255,255,255),1
+oix=ix : oiy=iy : ispeed=1
+
+do
+
+rem buttons to adjust sublight speed
+speedselected=0
+if makespeed(470,370,"+","* Increase *")>0 then speedselected=1
+if makespeed(470,410,"-","* Decrease *")>0 then speedselected=2
+if makespeed(470,430,"Ok","* MOVE! *")>0 then goto lowMove1
+if makespeed(440,430,"X","* Cancel *")>0 then speedselected=3
+
+select (speedselected)
+   case 1:
+      if soundon=1 then play sound 5
+      inc ispeed : if ispeed>9 then ispeed=9
+      wait time3 : goto exitsub1
+   endcase
+   case 2:
+      if soundon=1 then play sound 5
+      dec ispeed : if ispeed<1 then ispeed=1
+      wait time3 : goto exitsub1
+   endcase
+   case 3:
+      if soundon=1 then play sound 6
+      goto mainLoop : endcase
+endselect
+exitsub1:
+inputSpdRge("Move",ispeed,1)
+
+sync : loop
+
+lowMove1:
+for speed=1 to ispeed
+rem move in heading dir
+select (heading)
+   case 0: dec ix : if ix<1 then ix=0 : endcase
+   case 45:
+      dec ix : if ix<1 then ix=0
+      inc iy : if iy>9 then iy=9
+   endcase
+   case 90: inc iy : if iy>9 then iy=9 : endcase
+   case 135:
+      inc ix : if ix>9 then ix=9
+      inc iy : if iy>9 then iy=9
+   endcase
+   case 180: inc ix : if ix>9 then ix=9 : endcase
+   case 225:
+      inc ix : if ix>9 then ix=9
+      dec iy : if iy<1 then iy=0
+   endcase
+   case 270: dec iy : if iy<1 then iy=0 : endcase
+   case 315:
+      dec ix : if ix<1 then ix=0
+      dec iy : if iy<1 then iy=0
+   endcase
+endselect
+next speed
+
+if quadrant$(ix,iy)="." or quadrant$(ix,iy)="O" or quadrant$(ix,iy)="%" or quadrant$(ix,iy)="@"
+   ink rgb(0,255,0),1
+   text 30,450,"Helm control: Aye, "+playername$+" moving to quadrant "+str$(ix)+","+str$(iy)+" - sub-light = 0."+str$(ispeed)
+   gosub calcEnergyUsedL : gosub QuadrantMove
+   if soundon=1 then play sound 2
+   wait time1
+else
+   ix=oix : iy=oiy : ink rgb(255,0,0),1
+   text 30,450,"Helm control: Unable to comply "+playername$+". The quadrant is obstructed!"
+   gosub QuadrantMove
+   if soundon=1 then play sound 1
+   wait time1
+endif
+
+if enemyflag=1 then gosub moveEnemy
+if enemyflag=1 then gosub enemyFire
+gosub checkEngines
+startdate=startdate+(ispeed*difficulty)
+goto mainLoop
+
+rem move under jump drive engines
+jumpMove:
+if soundon=1 then play sound 5
+if soundon=1 then play sound 12
+
+if energy<=1 or engines<=0
+   ink rgb(255,0,0),1 : text 30,414,"Engineering: Jump drive is off-line "+playername$+"."
+   wspeed=1 : goto lowMove2
+endif
+
+rem auto shield shutdown
+if shield=1
+   ink rgb(255,255,0),1
+   text 30,430,"Shield control: Lowering shields for jump...."
+   shield=0
+endif
+
+ink rgb(255,255,255),1
+owx=wx : owy=wy : wspeed=1
+
+do
+
+rem buttons to adjust jump speed
+speedselected=0
+if makespeed(470,370,"+","* Increase *")>0 then speedselected=1
+if makespeed(470,410,"-","* Decrease *")>0 then speedselected=2
+if makespeed(470,430,"Ok","* JUMP! *")>0 then goto lowMove2
+if makespeed(440,430,"X","* Cancel *")>0 then speedselected=3
+
+select (speedselected)
+   case 1:
+      if soundon=1 then play sound 5
+      inc wspeed : if wspeed>9 then wspeed=9
+      wait time3 : goto exitsub2
+   endcase
+   case 2:
+      if soundon=1 then play sound 5
+      dec wspeed : if wspeed<1 then wspeed=1
+      wait time3 : goto exitsub2
+   endcase
+   case 3:
+      if soundon=1 then play sound 6
+      goto mainLoop : endcase
+endselect
+exitsub2:
+inputSpdRge("Jump",wspeed,2)
+
+sync : loop
+
+lowMove2:
+for speed=1 to wspeed
+rem move in heading dir
+select (heading)
+   case 0: dec wx : if wx<1 then wx=0 : endcase
+   case 45:
+      dec wx : if wx<1 then wx=0
+      inc wy : if wy>9 then wy=9
+   endcase
+   case 90: inc wy : if wy>9 then wy=9 : endcase
+   case 135:
+      inc wx : if wx>9 then wx=9
+      inc wy : if wy>9 then wy=9
+   endcase
+   case 180: inc wx : if wx>9 then wx=9 : endcase
+   case 225:
+      inc wx : if wx>9 then wx=9
+      dec wy : if wy<1 then wy=0
+   endcase
+   case 270: dec wy : if wy<1 then wy=0 : endcase
+   case 315:
+      dec wx : if wx<1 then wx=0
+      dec wy : if wy<1 then wy=0
+   endcase
+endselect
+next speed
+
+if sector$(wx,wy)="."
+   ink rgb(0,255,0),1
+   text 30,450,"Helm control: Aye, "+playername$+" jumping to sector "+str$(wx)+","+str$(wy)+" - jump speed = "+str$(wspeed)
+   gosub sectorMove : gosub calcEnergyUsedS : gosub changeQuadrant : gosub enemyHere
+   if soundon=1 then play sound 2
+   if soundon=1 then play sound 9
+   starfield(0,192,192)
+else
+   wx=owx : wy=owy
+   ink rgb(255,0,0),1
+   text 30,450,"Helm control: Unable to comply "+playername$+". The sector is obstructed!"
+   gosub sectorMove
+   if soundon=1 then play sound 1
+   wait time1
+endif
+
+gosub checkEngines
+startdate=startdate+(2*wspeed*difficulty)
+goto mainLoop
+
+rem shield control
+shieldCon:
+if soundon=1 then play sound 5
+if soundon=1 then play sound 12
+
+do
+
+if makespeed(470,370,"Up +","* Raise *")>0 then goto shieldup
+if makespeed(470,390,"Dn -","* Lower *")>0 then goto shielddown
+if makespeed(470,410,"X","* Cancel *")>0
+   if soundon=1 then play sound 6
+   goto mainLoop
+endif
+
+sync : loop
+
+shieldup:
+if shieldpower<=0
+   ink rgb(255,0,0),1
+   text 30,451,"Shield control: Unable to comply "+playername$+". Shield power is at 0%!"
+   shield=0 : goto endshield
+endif
+
+if soundon=1 then play sound 5
+ink rgb(0,255,0),1
+text 30,435,"Shield control: Aye, raising shields "+playername$+"."
+shield=1 : goto endshield
+
+shielddown:
+if soundon=1 then play sound 5
+ink rgb(0,255,0),1
+text 30,435,"Shield control: Lowering shields as ordered "+playername$+"."
+shield=0
+
+endshield:
+text 30,451,"Shield control: (Shields = "+str$(shieldpower)+")"
+wait time1 : goto mainLoop
+
+rem transporter control
+transportCon:
+if soundon=1 then play sound 5
+if soundon=1 then play sound 12
+planetx=ix : planety=iy
+
+if energy>500
+   ink rgb(0,255,0),1
+   text 30,435,"Engineering: Unable to comply "+playername$+". We have enough energy!"
+   text 30,451,"Engineering: (Energy = "+str$(energy)+")"
+   goto endcry1
+endif
+
+rem check for planet
+if planetflag=1
+   chkpln=rnd(20)+1
+   if chkpln<=5 and energy<=500
+      ink rgb(255,255,0),1 : crystal=rnd(100)+50
+      text 30,420,"Scanners: Planet contains sufficient resources. Mining team dispatched."
+      text 30,436,"Scanners: (Usable crystal detected = "+str$(crystal)+")"
+      wait rnd(time2)+time2 : ink rgb(0,255,0),1
+      text 30,452,"Mining team: "+str$(crystal)+" usable crystals have been extracted."
+      energy=energy+crystal
+      if energy>1000 then energy=1000
+      inc planetvisit
+   else
+      ink rgb(255,0,0),1
+      text 30,450,"Scanners: This planet has nothing of value to us."
+   endif
+endif
+
+endcry1:
+planetflag=0 : startdate=startdate+(4*difficulty)
+wait time1 : goto mainLoop
+
+rem main laser control
+laserCon:
+if soundon=1 then play sound 5
+if soundon=1 then play sound 12
+opx=px : opy=py : oix=ix : oiy=iy : lrange=1
+
+do
+
+rem buttons to adjust laser range
+speedselected=0
+if makespeed(470,370,"+","* Increase *")>0 then speedselected=1
+if makespeed(470,410,"-","* Decrease *")>0 then speedselected=2
+if makespeed(470,430,"Ok","* FIRE! *")>0 then goto fire1
+if makespeed(440,430,"X","* Cancel *")>0 then speedselected=3
+
+select (speedselected)
+   case 1:
+      if soundon=1 then play sound 5
+      inc lrange : if lrange>3 then lrange=3
+      wait time3 : goto exitsub3
+   endcase
+   case 2:
+      if soundon=1 then play sound 5
+      dec lrange : if lrange<1 then lrange=1
+      wait time3 : goto exitsub3
+   endcase
+   case 3:
+      if soundon=1 then play sound 6
+      goto mainLoop : endcase
+endselect
+exitsub3:
+inputSpdRge("Range",lrange,0)
+
+sync : loop
+
+fire1:
+for rg1=1 to lrange
+rem move in heading dir
+select (heading)
+   case 0: px=ix-lrange : if px<1 then px=0 : py=iy : endcase
+   case 45:
+      px=ix-lrange : if px<1 then px=0
+      py=iy+lrange : if px>9 then px=9
+   endcase
+   case 90: px=ix : py=iy+lrange : if py>9 then py=9 : endcase
+   case 135:
+      px=ix+lrange : if px>9 then px=9
+      py=iy+lrange : if py>9 then py=9
+   endcase
+   case 180: px=ix+lrange : if px>9 then px=9 : py=iy : endcase
+   case 225:
+      px=ix+lrange : if px>9 then px=9
+      py=iy-lrange : if py<1 then py=0
+   endcase
+   case 270: px=ix : py=iy-lrange : if py<1 then py=0 : endcase
+   case 315:
+      px=ix-lrange : if px<1 then px=0
+      py=iy-lrange : if py<1 then py=0
+   endcase
+endselect
+next rg1
+
+if soundon=1 then play sound 4
+energy=energy-(2*rg1*difficulty)
+
+rem the closer you are the better chance to hit
+chkhit1=rnd(rg1)+1
+
+if chkhit1<=2 and quadrant$(px,py)="-["
+   weapon=1 : gosub enemyHealth
+   gosub checkRank : gosub checkEndgame
+else
+   ink rgb(255,0,0),1
+   text 30,450,"Fire control: Lasers fired....but it's a clean miss!"
+endif
+
+if quadrant$(opx,opy)<>"=O"
+   if quadrant$(opx,opy)<>"-[" then quadrant$(opx,opy)="."
+else
+   quadrant$(opx,opy)="=O"
+endif
+
+if enemyflag=1 then gosub moveEnemy
+if enemyflag=1 then gosub enemyFire
+startdate=startdate+(lrange*difficulty)
+wait time1 : goto mainLoop
+
+rem torpedo control
+torpedoCon:
+if soundon=1 then play sound 5
+if soundon=1 then play sound 12
+otx=tx : oty=ty : oix=ix : oiy=iy : trange=1
+
+do
+
+rem buttons to adjust torpedo range
+speedselected=0
+if makespeed(470,370,"+","* Increase *")>0 then speedselected=1
+if makespeed(470,410,"-","* Decrease *")>0 then speedselected=2
+if makespeed(470,430,"Ok","* LAUNCH! *")>0 then goto fire2
+if makespeed(440,430,"X","* Cancel *")>0 then speedselected=3
+
+select (speedselected)
+   case 1:
+      if soundon=1 then play sound 5
+      inc trange : if trange>5 then trange=5
+      wait time3 : goto exitsub4
+   endcase
+   case 2:
+      if soundon=1 then play sound 5
+      dec trange : if trange<1 then trange=1
+      wait time3 : goto exitsub4
+   endcase
+   case 3:
+      if soundon=1 then play sound 6
+      goto mainLoop : endcase
+endselect
+exitsub4:
+inputSpdRge("Range",trange,0)
+
+sync : loop
+
+fire2:
+for rg2=1 to trange
+rem move in heading dir
+select (heading)
+   case 0: tx=ix-trange : if tx<1 then tx=0 : ty=iy : endcase
+   case 45:
+      tx=ix-trange : if tx<1 then tx=0
+      ty=iy+trange : if ty>9 then ty=9
+   endcase
+   case 90: tx=ix : ty=iy+trange : if ty>9 then ty=9 : endcase
+   case 135:
+      tx=ix+trange : if tx>9 then tx=9
+      ty=iy+trange : if ty>9 then ty=9
+   endcase
+   case 180: tx=ix+trange : if tx>9 then tx=9 : ty=iy : endcase
+   case 225:
+      tx=ix+trange : if tx>9 then tx=9
+      ty=iy-trange : if ty<1 then ty=0
+   endcase
+   case 270: tx=ix : ty=iy-trange : if ty<1 then ty=0 : endcase
+   case 315:
+      tx=ix-trange : if tx<1 then tx=0
+      ty=iy-trange : if ty<1 then ty=0
+   endcase
+endselect
+next rg2
+
+if soundon=1 then play sound 7
+energy=energy-(2*rg2*difficulty)
+
+rem use torpedoes
+dec torpedo
+if torpedo=0
+   dec tubes
+   if tubes=0
+      tubes=0 : torpedo=0
+   else
+      torpedo=4
+   endif
+endif
+
+rem the closer you are the better chance to hit
+chkhit2=rnd(rg2)+1
+
+if chkhit2<=2 and quadrant$(tx,ty)="-["
+   weapon=2 : gosub enemyHealth : gosub checkRank : gosub checkEndgame
+else
+   ink rgb(255,0,0),1
+   text 30,450,"Fire control: Torpedo fired....but it's a clean miss!"
+endif
+
+if quadrant$(otx,oty)<>"=O"
+   if quadrant$(otx,oty)<>"-[" then quadrant$(otx,oty)="."
+else
+   quadrant$(otx,oty)="=O"
+endif
+
+if enemyflag=1 then gosub moveEnemy
+if enemyflag=1 then gosub enemyFire
+startdate=startdate+(trange*difficulty)
+wait time1 : goto mainLoop
+
+rem engineering control (repairs)
+engineerCon:
+if soundon=1 then play sound 5
+if soundon=1 then play sound 12
+
+rem no repairs needed
+if shieldpower>50 and hull>50 and engines>50
+   ink rgb(0,255,0),1
+   text 30,414,"Engineering: Unable to comply "+playername$+". No need for repairs!"
+   text 30,430,"Engineering: (All ship systems functional)"
+   goto noeng1
+endif
+
+rem repair shield
+if shieldpower<=50 and energy>100
+   ink rgb(255,255,0),1 : repair1=rnd(20)+10
+   text 30,414,"Engineering: Making repairs on shield control."
+   text 30,430,"Engineering: (Energy used = "+str$(repair1)+")"
+   energy=energy-repair1 : shieldpower=shieldpower+repair1
+endif
+
+rem repair hull
+if hull<=50 and energy>100
+   ink rgb(255,255,0),1 : repair2=rnd(20)+10
+   text 30,414,"Engineering: Making repairs on hull integrity."
+   text 30,430,"Engineering: (Energy used = "+str$(repair2)+")"
+   energy=energy-repair2 : hull=hull+repair2
+endif
+
+rem repair engines
+if engines<=50 and energy>100
+   ink rgb(255,255,0),1 : repair3=rnd(20)+10
+   text 30,414,"Engineering: Making repairs on sublight and jump engines."
+   text 30,430,"Engineering: (Energy used = "+str$(repair3)+")"
+   energy=energy-repair3 : engines=engines+repair3
+endif
+
+rem not enough energy
+if energy<=100
+   ink rgb(255,0,0),1
+   text 30,414,"Engineering: Unable to comply "+playername$+". Energy is too low!"
+   text 30,430,"Engineering: (Energy = "+str$(energy)+")"
+endif
+
+noeng1:
+startdate=startdate+(3*difficulty)
+wait time1 : goto mainLoop
+
+rem docking control (starbase)
+dockCon:
+if soundon=1 then play sound 5
+if soundon=1 then play sound 12
+starbasex=ix : starbasey=iy
+
+rem dock with starbase
+if starbaseflag=1
+   if energy<1000 or shieldpower<100 or hull<100 or engines<100
+      ink rgb(255,255,0),1
+      text 30,435,"Starbase control: Permission granted. Docking with starbase at "+str$(starbasex)+","+str$(starbasey)+"."
+      wait rnd(time2)+time2
+      if soundon=1 then play sound 10
+      ink rgb(0,255,0),1
+      text 30,451,"Starbase control: Repairs completed."
+      rem restore all energy and systems
+      if energy<1000 then energy=1000
+      if shieldpower<100 then shieldpower=100
+      if hull<100 then hull=100
+      if numcrew<400 then numcrew=400
+      if engines<100 then engines=100
+      inc starbasedock
+   else
+      ink rgb(255,255,0),1
+      text 30,451,"Starbase control: Permission denied...no repairs are needed."
+   endif
+else
+   ink rgb(255,0,0),1
+   text 30,451,"Scanners: There is no starbase in the immediate area!"
+endif
+
+enddock:
+starbaseflag=0 : startdate=startdate+(4*difficulty)
+wait time1 : goto mainLoop
+
+rem enter wormhole
+wormJump:
+owx=wx : owy=wy : wx=rnd(9) : wy=rnd(9)
+gosub sectorMove
+ink rgb(0,255,0),1
+text 30,450,"Helm control: Aye, "+playername$+" Entering wormhole at "+str$(wx)+","+str$(wy)+"."
+gosub calcEnergyUsedS : gosub changeQuadrant : gosub enemyHere
+wait time1
+if soundon=1 then play sound 2
+if soundon=1 then play sound 9
+starfield(0,192,192)
+wormholeflag=0 : startdate=startdate+(2*difficulty)
+wait time1 : goto mainLoop
+
+rem short range scan
+srsCon:
+if soundon=1 then play sound 5
+scanx=wx : scany=wy : srscan=1
+if soundon=1 then play sound 14
+gosub scanQuadrant : energy=energy-(1*difficulty)
+startdate=startdate+(1*difficulty) : srscan=0
+wait time1+time2 : goto mainLoop
+
+rem long range scan
+lrsCon:
+oscanx=scanx : oscany=scany
+if soundon=1 then play sound 5
+if soundon=1 then play sound 12
+lrscan=1
+
+if heading=0
+   if soundon=1 then play sound 1
+   ink rgb(255,0,0),1
+   text 30,450,"Scanner control: Unable to comply "+playername$+" use SRScan!"
+   wait time1 : goto mainLoop
+endif
+
+do
+
+rem buttons to adjust scan range
+speedselected=0
+if makespeed(470,370,"+","* Increase *")>0 then speedselected=1
+if makespeed(470,410,"-","* Decrease *")>0 then speedselected=2
+if makespeed(470,430,"Ok","* SCAN! *")>0 then goto doscan
+if makespeed(440,430,"X","* Cancel *")>0 then speedselected=3
+
+select (speedselected)
+   case 1:
+      if soundon=1 then play sound 5
+      inc lrscan
+      if lrscan>3 then lrscan=3
+      wait time3 : goto exitscan
+   endcase
+   case 2:
+      if soundon=1 then play sound 5
+      dec lrscan
+      if lrscan<1 then lrscan=1
+      wait time3 : goto exitscan
+   endcase
+   case 3:
+      if soundon=1 then play sound 6
+      goto mainLoop
+   endcase
+endselect
+exitscan:
+inputSpdRge("Range",lrscan,2)
+
+sync : loop
+
+doscan:
+if soundon=1 then play sound 14
+for scn=1 to lrscan
+rem scan in heading dir
+select (heading)
+   case 0: dec scanx : if scanx<1 then scanx=0 : endcase
+   case 45:
+      dec scanx : if scanx<1 then scanx=0
+      inc scany : if scany>9 then scany=9
+   endcase
+   case 90: inc scany : if scany>9 then scany=9 : endcase
+   case 135:
+      inc scanx : if scanx>9 then scanx=9
+      inc scany : if scany>9 then scany=9
+   endcase
+   case 180: inc scanx : if scanx>9 then scanx=9 : endcase
+   case 225:
+      inc scanx : if scanx>9 then scanx=9
+      dec scany : if scany<1 then scany=0
+   endcase
+   case 270: dec scany : if scany<1 then scany=0 : endcase
+   case 315:
+      dec scanx : if scanx<1 then scanx=0
+      dec scany : if scany<1 then scany=0
+   endcase
+endselect
+next scn
+
+gosub scanQuadrant
+energy=energy-(1*lrscan*difficulty)
+startdate=startdate+(1*lrscan*difficulty)
+wait time1 : gosub mainLoop
+
+rem about the game
+about:
+if soundon=1 then play sound 5
+if soundon=1 then play sound 9
+starfield(192,192,192)
+if soundon=1 then play sound 13
+about01(gvers$)
+makebutton_ext(320,16,"About","")
+
+do
+
+if makebutton_ext(320,460,"DONE!","")>0 then goto endabout
+
+sync : loop
+
+endabout:
+if soundon=1 then play sound 6
+if soundon=1 then play sound 9
+starfield(192,192,192)
+goto mainMenu
+
+rem clear array and end
+quit:
+if soundon=1 then play sound 5
+if soundon=1 then play sound 1
+if soundon=1 then play sound 9
+starfield(192,0,0)
+wait time3
+cls rgb(96,96,96) : makebox(320,220,"") : ink rgb(255,0,0),1
+center text 320,210,"Exit the game?"
+makebutton_ext(320,16,"Exit","")
+
+do
+
+if makebutton_ext(290,237,"Yes","")>0 then goto exit1
+if makebutton_ext(350,237,"No","")>0
+   if soundon=1 then play sound 6
+   if soundon=1 then play sound 9
+   starfield(192,192,192)
+   if menuyes=1 then goto mainMenu
+   if menuyes=0 then goto mainLoop
+endif
+
+sync : loop
+
+exit1:
+undim sector$() : undim quadrant$() : undim f_name$()
+enable escapekey
+set emulation off
+if loaded=1 then stop music 1
+if loaded=1 then delete music 1
+for x1=1 to 14
+   if soundon=1 then delete sound x1
+next x1
+end
+
+rem display the sector
+displaySector:
+ink rgb(255,255,255),1
+center text 107,15,"Sector: "+str$(wx)+","+str$(wy)
+x1=100 : y1=50
+for gx = 0 to 9
+   for gy = 0 to 9
+      gosub checkSector : center text x1,y1,sector$(gx,gy) : x1=x1+20
+      if x1=300
+         y1=y1+20 : x1=100
+      endif
+   next gy
+next gx
+
+rem display number reference
+ny1=53 : ink rgb(255,255,0),1
+for n1=0 to 9
+   text 80,ny1,str$(n1) : ny1=ny1+20
+next n1
+
+nx1=97
+for n1=0 to 9
+   text nx1,35,str$(n1) : nx1=nx1+20
+next n1
+return
+
+rem display the Quadrant
+displayQuadrant:
+ink rgb(255,255,255),1
+if scan=0 then center text 362,15,"Quadrant: "+str$(ix)+","+str$(iy)
+x2=350 : y2=50
+for sx = 0 to 9
+   for sy = 0 to 9
+      gosub checkQuadrant
+      if scan=0 then center text x2,y2,quadrant$(sx,sy)
+      x2=x2+20
+      if x2=550
+         y2=y2+20 : x2=350
+      endif
+   next sy
+next sx
+
+rem display number reference
+ny1=53 : ink rgb(255,255,0),1
+for n1=0 to 9
+   text 330,ny1,str$(n1) : ny1=ny1+20
+next n1
+
+nx1=347
+for n1=0 to 9
+   text nx1,35,str$(n1) : nx1=nx1+20
+next n1
+return
+
+rem read data for sector
+readSector:
+for gx = 0 to 9
+   for gy = 0 to 9
+      read sector$(gx,gy)
+   next gy
+next gx
+return
+
+rem read data for Quadrant
+readQuadrant:
+for sx = 0 to 9
+   for sy = 0 to 9
+      read quadrant$(sx,sy)
+   next sy
+next sx
+return
+
+rem update sector
+checkSector:
+if sector$(gx,gy)="+" and enemyflag=0 then ink rgb(0,255,0),1
+if sector$(gx,gy)="+" and enemyflag=1 then ink rgb(255,0,0),1
+if sector$(gx,gy)="." then ink rgb(255,255,255),1
+return
+
+rem update Quadrant
+checkQuadrant:
+if quadrant$(sx,sy)="*"
+   ink rgb(0,255,255),1 : inc numst
+endif
+if quadrant$(sx,sy)="O"
+   ink rgb(0,255,0),1 : inc numpl
+endif
+if quadrant$(sx,sy)="%"
+   ink rgb(0,0,255),1 : inc numsb
+endif
+if quadrant$(sx,sy)="@"
+   ink rgb(255,0,255),1 : inc numwh
+endif
+if quadrant$(sx,sy)="o"
+   ink rgb(255,255,0),1 : inc numsn
+endif
+if quadrant$(sx,sy)="-["
+   ink rgb(255,0,0),1 : inc numen
+endif
+
+if quadrant$(sx,sy)="=O" then ink rgb(255,255,255),1
+if quadrant$(sx,sy)="." then ink rgb(255,255,255),1
+if quadrant$(sx,sy)="X" then ink rgb(255,0,0),1
+return
+
+rem displays Quadrant movement
+QuadrantMove:
+
+rem detect planet
+if quadrant$(ix,iy)="O"
+   ink rgb(0,255,0),1 : text 30,435,"Helm control: Transport to planet."
+   quadrant$(oix,oiy)="." : quadrant$(ix,iy)="O" : planetflag=1
+endif
+rem detect starbase
+if quadrant$(ix,iy)="%"
+   ink rgb(0,0,255),1 : text 30,435,"Helm control: Dock with starbase."
+   quadrant$(oix,oiy)="." : quadrant$(ix,iy)="%" : starbaseflag=1
+endif
+rem detect wormhole
+if quadrant$(ix,iy)="@"
+   ink rgb(255,0,255),1 : text 30,435,"Helm control: Enter wormhole."
+   quadrant$(oix,oiy)="." : quadrant$(ix,iy)="@" : wormholeflag=1
+endif
+
+load array "data\system."+numarray$+".dat",quadrant$(0)
+if quadrant$(ix,iy)<>"O" then quadrant$(ix,iy)="=O"
+if quadrant$(ix,iy)<>"%" then quadrant$(ix,iy)="=O"
+if quadrant$(ix,iy)<>"@" then quadrant$(ix,iy)="=O"
+if enemyflag=1 then gosub moveEnemy
+return
+
+rem displays sector movement
+sectorMove:
+sector$(owx,owy)="." : sector$(wx,wy)="+" : ix=0 : iy=0
+return
+
+rem displays the Quadrant legend
+displayLegend:
+if soundon=1 then play sound 5
+ink rgb(0,255,255),1 : text 80,260,"*"
+ink rgb(255,255,255),1 : text 90,260," = Stars"
+ink rgb(0,255,0),1 : text 80,275,"O"
+ink rgb(255,255,255),1 : text 90,275," = Planets"
+ink rgb(255,255,0),1 : text 80,290,"o"
+ink rgb(255,255,255),1 : text 90,290," = Sun"
+ink rgb(255,0,255),1 : text 80,305,"@"
+ink rgb(255,255,255),1 : text 90,305," = Wormhole"
+ink rgb(0,0,255),1 : text 215,260,"%"
+ink rgb(255,255,255),1 : text 225,260," = Starbase"
+ink rgb(255,0,0),1 : text 215,275,"-["
+ink rgb(255,255,255),1 : text 225,275," = Enemies"
+ink rgb(255,255,255),1 : text 210,290,"=O"
+ink rgb(255,255,255),1 : text 225,290," = Your ship"
+wait time1+time2 : if soundon=1 then play sound 6
+goto mainLoop
+return
+
+rem displays ship status
+checkShipStatus:
+rem energy left
+ink rgb(0,255,255),1 : text 330,260,"Energy: "+str$(energy)
+if energy<=1
+   energy=1 : ink rgb(255,0,0),1
+   text 385,260,"(Battery)"
+endif
+
+rem shield status
+ink rgb(0,255,255),1 : text 330,275,"Shields: "
+if shield=0
+   ink rgb(255,0,0),1 : shield$="Down"
+   shield=0
+else
+   ink rgb(0,255,0),1 : shield$="Up"
+   shield=1
+   if shieldpower<=0 then shieldpower=0
+   text 385,275," - "+str$(shieldpower)+"%"
+endif
+text 373,275,shield$
+
+rem hull status
+ink rgb(0,255,255),1
+if hull<=0 then hull=0
+text 330,290,"Hull: "+str$(hull)+"%"
+
+rem engine condition
+if engines<=0 then engines=0
+text 330,305,"Engines: "+str$(engines)+"%"
+
+rem torpedoes left
+text 522,427,"Torpedos: "+str$(tubes)+" x "+str$(torpedo)
+
+rem stardate start/end
+text 453,260,"Spacedate:"
+ink rgb(0,255,0),1 : text 512,260,str$(startdate)+" / "+str$(enddate)
+
+rem crew status
+ink rgb(0,255,255),1
+text 453,275,"Crew:"
+if numcrew=>350 then ink rgb(0,255,0),1 else ink rgb(255,0,0),1
+text 487,275,str$(numcrew)
+
+rem enemies
+ink rgb(0,255,255),1 : text 453,290,"Enemies:"
+ink rgb(255,0,0),1 : text 501,290,str$(numenemies)
+
+rem display rank
+ink rgb(0,255,255),1 : text 453,305,"Rank: "
+ink rgb(255,255,255),1 : text 485,305,gamerank$
+
+rem heading
+ink rgb(255,255,255),1 : text 539,340,"Heading" : ink rgb(0,255,0),1
+if heading=0 then add$="00"
+if heading=45 or heading=90 then add$="0"
+center text 560,384,add$+str$(heading) : add$=""
+return
+
+rem figures energy consumption used in Quadrant
+calcEnergyUsedL:
+if shield=1 then energy=energy-((1*ispeed)*2) else energy=energy-(1*ispeed)
+if energy<=1 then energy=1
+return
+
+rem figures energy consumption used in sector
+calcEnergyUsedS:
+energy=energy-(10*wspeed)
+if energy<=1 then energy=1
+return
+
+rem create random enemies here
+enemyHere:
+chk=rnd(10)+1
+if chk<=5
+   if quadrant$(ix,iy)<>"=O" or quadrant$(ix,iy)<>"*" or quadrant$(ix,iy)<>"O" or quadrant$(ix,iy)<>"o" or quadrant$(ix,iy)<>"%" or quadrant$(ix,iy)<>"@"
+      ex=rnd(9) : ey=rnd(9)
+      quadrant$(ex,ey)="-["
+      if soundon=1 and scan=0 then play sound 1
+      enemyflag=1 : if scan=1 then numen=1
+   endif
+endif
+return
+
+rem move enemies when starship moves
+moveEnemy:
+moveenemy=rnd(7) : oex=ex : oey=ey
+
+if quadrant$(ex,ey)="-["
+   if moveenemy=0
+      inc ex : if ex>9 then ex=9
+      if quadrant$(ex,ey)="=O" then dec ex
+   endif
+   if moveenemy=1
+      dec ex : if ex<1 then ex=0
+      if quadrant$(ex,ey)="=O" then inc ex
+   endif
+   if moveenemy=2
+      inc ey : if ey>9 then ey=9
+      if quadrant$(ex,ey)="=O" then dec ey
+   endif
+   if moveenemy=3
+      dec ey : if ey<1 then ey=0
+      if quadrant$(ex,ey)="=O" then inc ey
+   endif
+   if moveenemy=4
+      dec ex : if ex<1 then ex=0
+      dec ey : if ey<1 then ey=0
+      if quadrant$(ex,ey)="=O"
+         inc ex : inc ey
+      endif
+   endif
+   if moveenemy=5
+      inc ex : if ex>9 then ey=9
+      dec ey : if ey<1 then ey=0
+      if quadrant$(ex,ey)="=O"
+         dec ex : inc ey
+      endif
+   endif
+   if moveenemy=6
+      inc ex : if ex>9 then ex=9
+      inc ey : if ey>9 then ey=9
+      if quadrant$(ex,ey)="=O"
+         dec ex : dec ey
+      endif
+   endif
+   if moveenemy=7 and quadrant$(ex,ey)<>"=O"
+      dec ex : if ex<1 then ex=0
+      inc ey : if ey>9 then ey=9
+      if quadrant$(ex,ey)="=O"
+         inc ex : dec ey
+      endif
+   endif
+endif
+
+quadrant$(oex,oey)="."
+if quadrant$(st1x,st1y)<>"*" or quadrant$(pl1x,pl1y)<>"O" or quadrant$(sn1x,sn1y)<>"o"
+   quadrant$(ex,ey)="-["
+else
+   rem TODO:?
+endif
+return
+
+rem enemy fire routine
+enemyFire:
+chkfire=rnd(3)+1 : crewdead=rnd(5)+1
+if soundon=1 then play sound 11
+if chkfire<=2
+   ink rgb(255,0,0),1 : damage=rnd(10)+5*difficulty
+   if shield=1
+      shieldpower=shieldpower-damage
+      if shieldpower<=0 then shieldpower=0
+      text 30,414,"Fire control: Enemy fires weapons and impacts for "+str$(damage)+" shield damage!"
+      text 30,430,"Fire control: (Shield integrity = "+str$(shieldpower)+")"
+      if shieldpower<=0 then shield=0
+   else
+      hull=hull-damage : numcrew=numcrew-crewdead
+      text 30,414,"Fire control: Enemy fires weapons and impacts for "+str$(damage)+" hull damage!"
+      text 30,430,"Fire control: (Hull integrity = "+str$(hull)+")"
+      rem ship destroyed
+      gosub checkEndgame
+   endif
+else
+   ink rgb(0,255,0),1
+   text 30,430,"Fire control: Enemy fires....but it's a clean miss."
+endif
+wait time1
+return
+
+rem checks for end game
+checkEndgame:
+if hull<=0 or numenemies<=0 or startdate=>enddate
+endGameNow:
+   cls rgb(96,96,96) : if soundon=1 then play sound 1
+   makebox(320,220,"") : makebox(320,280,"")
+   ink rgb(255,0,0),1 : center text 320,200,"The Game Is Over!"
+   ink rgb(255,255,0),1
+   center text 320,220,"(-[) Enemies destroyed: " + str$(enemydestroyed)
+   center text 320,236,"(O) Planets visited: " + str$(planetvisit)
+   center text 320,256,"(%) Starbases docked: " + str$(starbasedock)
+   center text 320,272,"(@) Wormholes found: " + str$(wormholefound)
+   ink rgb(0,255,0),1 : center text 320,288,"Total Score: " + str$(totalscore)
+   wait time1 : goto quit
+endif
+return
+
+rem check engines routine
+checkEngines:
+engchk=rnd(5)+1
+if engchk<=3 and ispeed>7 or wspeed>7
+   ink rgb(255,0,0),1 : damage=rnd(10)+5*difficulty : engines=engines-damage
+   text 30,414,"Engineering: Engines have taken "+str$(damage)+" damage from last use."
+   text 30,430,"Engineering: (Engine integrity = "+str$(engines)+")"
+endif
+return
+
+rem routine to change sectors
+changeQuadrant:
+numarray$=str$(wx)+str$(wy)
+load array "data\system."+numarray$+".dat",quadrant$(0)
+
+oix=ix : oiy=iy : ix=rnd(9) : iy=rnd(9)
+if quadrant$(ix,iy)="." or quadrant$(ix,iy)<>"-[" then quadrant$(ix,iy)="=O" else quadrant$(0,0)="=O"
+return
+
+rem routine to scan a sector
+scanQuadrant:
+
+numarray$=str$(scanx)+str$(scany)
+load array "data\system."+numarray$+".dat",quadrant$(0)
+
+numst=0 : numpl=0 : numsn=0 : numwh=0 : numsb=0
+scan=1 : gosub displayQuadrant : if srscan=0 then gosub enemyHere
+
+ink rgb(0,255,0),1
+text 80,260,"Scanners indicate there are:"
+text 80,276,str$(numst)+" Stars, "+str$(numpl)+" Planets,"
+text 80,292,str$(numsn)+" Suns, "+str$(numwh)+" Wormholes,"
+if srscan=1
+   text 80,308,str$(numsb)+" Starbases, and "+str$(numen)+" Enemies in this sector."
+else
+   text 80,308,str$(numsb)+" Starbases, and "+str$(numen)+" Enemies in sector "+str$(scanx)+","+str$(scany)
+endif
+owx=wx : owy=wy : numarray$=str$(owx)+str$(owy)
+load array "data\system."+numarray$+".dat",quadrant$(0)
+
+oix=ix : oiy=iy : quadrant$(oix,oiy)="=O"
+scan=0 : scanx=oscanx : scany=oscany
+return
+
+rem computer simulator
+compSim:
+wait time1 : ink rgb(0,0,255),1
+if soundon=1 then play sound 12
+center text 320,460,"Computer: WORKING, Please wait..."
+wait time1 : if soundon=1 then play sound 6
+return
+
+rem check rank
+checkRank:
+select (enemydestroyed)
+   case >5: gamerank$="Lieutenant Jr. Grade" : goto displayRank : endcase
+   case >10: gamerank$="Lieutenant" : goto displayRank : endcase
+   case >15: gamerank$="Lieutenant Commander" : goto displayRank : endcase
+   case >20: gamerank$="Commander" : goto displayRank : endcase
+   case >25: gamerank$="Captain" : goto displayRank : endcase
+   case >30: gamerank$="Admiral" : goto displayRank : endcase
+   case >35: gamerank$="Rear Admiral" : goto displayRank : endcase
+endselect
+return
+
+rem displays the new rank
+displayRank:
+wait time2 : if soundon=1 then play sound 13
+cls rgb(96,96,96) : ink rgb(255,255,255),1 : makebox(320,220,"")
+center text 320,200,"Congratulations!"
+center text 320,216,"Your new rank is:"
+center text 320,232,gamerank$
+saveConfig(difficulty$,playername$,gamerank$,soundon$) : wait time1
+goto mainLoop
+
+rem unlock the game
+unlockGame:
+new1$="" : line1$=""
+cls rgb(96,96,96) : ink rgb(255,255,255),1 : makebox(320,220,"")
+center text 320,200,"Enter unlock code:"
+
+do
+
+rem build the password string
+new1$=entry$()
+for n1=1 to len(new1$)
+   if asc(mid$(new1$,n1))=10 then line1$=left$(line1$,len(line1$)-1) else line1$=line1$+mid$(new1$,n1)
+next n1
+clear entry buffer
+
+rem show the line
+ink rgb(0,255,0),1 : text 291,216,line1$ : password$=line1$
+
+if makebutton_ext(320,460,"DONE!","")>0
+
+rem correct code?
+code=val(regcode$)
+if password$=regcode$
+   if soundon=1 then play sound 13
+   ink rgb(0,255,0),1 : center text 320,416,"Code accepted."
+   center text 320,432,"Thank you for registering!"
+   write to registry "Software\zonesoft-software\CharTrek-TFO","RegCode",code
+   regged$="Registered"
+   wait time1 : if soundon=1 then play sound 6
+   goto exitcode
+else
+   if soundon=1 then play sound 1
+   ink rgb(255,0,0),1
+   center text 320,416,"Invalid code!"
+   center text 320,432,"Game will run in "+str$(minleft)+"-minute demo mode."
+   regged$="Demo"
+   wait time1 : if soundon=1 then play sound 6
+   goto options1
+endif
+exitcode:
+return
+endif
+
+sync : loop
+return
+
+rem makes text scroll
+help:
+
+if soundon=1 then play sound 5
+if soundon=1 then play sound 9
+starfield(192,192,192)
+
+rem variables
+y1=0 : s1=0 : b1=620
+
+rem scroll bar
+ink rgb(0,255,0),1 : box 0,0,20,100 : get image 1,0,0,20,100
+
+rem main loop
+do
+
+rem get sprite from scroll bar
+sprite 1,b1,s1,1
+
+rem print stuff
+cls rgb(96,96,96) : ink rgb(255,255,255),1 : set cursor 0,y1
+makebutton_ext(320,16,"Help","")
+
+ink rgb(0,255,0),1
+print "*** Commands: *** (current)"
+ink rgb(0,255,255),1
+print "CharTrek-TFO (The First One)"
+print
+print "Main Menu >>>>"
+print
+print "Start!    - Start playing the game."
+print "Help      - Displays this help text."
+print "Options   - Change difficulty, your name, register, etc."
+print "About     - A little info about the game."
+print "Exit      - Exit the game."
+print
+print "In Game >>>>"
+print
+print "SubLight - Move starship (sub-light) to Quadrant x,y."
+print "JmpDrive - Move starship (jump) to Sector x,y."
+print
+print "Shields   - Raises and lowers ships deflector shields."
+print "Transport - Activate transporter to transport to planet."
+print
+print "Lasers   - Fire main lasers. They can be fired 360 degrees, max range of 3."
+print "Torpedos - Launch torpedo. They can also be fired 360 degrees, max range of 5."
+print
+print "Engineer - Make emergency repairs on shields, hull, or engines."
+print "Docking  - Allows you to dock with a starbase for repairs."
+print
+print "SRScan - Short Range Scan - used to scan for cloaked enemies or other"
+print "         objects within the current sector."
+print "LRScan - Long Range Scan - used to check for enemy activity in nearby"
+print "         sectors. (max range is 3, 360 degrees)"
+print
+print "Tractor  - Use this to hold enemies in place while attacking."
+print "Legend   - Shows the object legend."
+print
+print "MainMenu - Return to the main menu."
+print "Exit     - Exit the game now."
+print
+print "More >>>>"
+print
+print "Heading Display - sets the direction of the ship. Also sets direction"
+print "for firing weapons."
+print
+print "Move Display - set distance for sub-light or jump drive (1-9)."
+print
+print "Range Display - set the range for lasers (1-3) or torpedoes (1-5)."
+print
+print "You can also click the 'X' button to cancel commands."
+print
+ink rgb(0,255,0),1
+print "*** Options: ***"
+ink rgb(0,255,255),1
+print
+print "Difficulty - Use this to set the number of enemies, power, health,"
+print "damage...etc. Three settings, Easy, Medium, and Hard."
+print
+print "Name - Change your name."
+print
+print "Sound - Changes sound settings to either On or Off."
+print
+print "Music/MP3 - Music setting lets you select a track from the MP3 list and"
+print "set whether to play it once or to loop it (repeat). NOTE: all MP3's"
+print "must be copied to the 'mp3s' folder. (max of 26)"
+print
+print "Register - Let's you register the game to remove the time limit and"
+print "allow you to access the mp3 options. (requires an unlock code)"
+print
+print "<- Back - Returns you to the game and saves your current settings."
+print
+ink rgb(0,255,0),1
+print "*** Hints and Tips: ***"
+ink rgb(0,255,255),1
+print
+print "Everything on your ship uses 'energy' so take care on how much is"
+print "used at all times. If you find yourself low on energy, locate the"
+print "nearest planet to mine energy crystals or dock at a nearby starbase"
+print "for repairs if available."
+print
+print "When using sublight or jump drive use caution when going over distances"
+print "of 0.7 (sublight) or 7.0 (jumpdrive), this may cause engine overheating"
+print "therefore causing engine damage."
+print
+print "If entering a sector that has enemies, make sure you use your shields"
+print "to absorb the enemy fire if hit. if shields are down you WILL take"
+print "hull damage."
+print
+print "You have crew you need to keep an eye on. Lose too many crew members"
+print "and your ship will start to lose it's efficiency and you will suffer"
+print "more damage than usual. You can replenish crew ONLY at a starbase."
+print
+print "If you are 500 or above on energy, going to a planet to transport for"
+print "mining crystals will be of no use, so don't bother."
+print
+print "When making emergency repairs, any system that is below 50% (i.e."
+print "shields, hull, or engines) will be considered repairable."
+print
+print "When docking with a starbase,transporting to a planet, or entering"
+print "a stable wormhole you move directly ON the object and press the."
+print "appropriate button. (if applicable)"
+print
+print "When carrying out a long range scan, enemies can still move from"
+print "sector to sector....even into YOUR current sector!"
+print
+ink rgb(0,255,0),1
+print "*** Registration: ***"
+ink rgb(0,255,255),1
+print
+print "Registering allows:"
+print
+print "1) Removing the 30-minute time limit."
+print "2) You to play your own MP3's."
+print
+print "Please take into consideration on registering this game! You may"
+print "make donations through PayPal - a minimum of $1.00, but you can"
+print "pay however much you want over a dollar to help with development"
+print "or just buy me a beer or a cup of coffee."
+print
+print "My email address is 'zonemaster@yahoo.com'."
+print
+ink rgb(0,255,0),1
+print "*** Comments and suggestions: ***"
+ink rgb(0,255,255),1
+print
+print "Please send me comments or suggestions as to what I should add or"
+print "change in the game. Although I like the 'Trek' series I may use"
+print "something that isn't entirely right, so I want to know about it."
+print
+print "Keep in mind this is a just a prototype/Alpha and does certainly not"
+print "reflect the finished game at all. Things come and go, so until it is"
+print "out of alpha don't expect very much staying the way it is."
+print
+print "Take into consideration that some things I have NOT completely tested,"
+print "so they may or may not work properly."
+print
+print "I am NOT an artist so if anyone wants to take up the project of making"
+print "graphics in place of the ASCII characters, you are more than welcome to do"
+print "so."
+print
+print "When making bug reports please be detailed in your description of the"
+print "bug or problem. I can't fix it if I don't know what I am looking for."
+print
+ink rgb(255,0,0),1
+print "If for some reason the 'config\CT-TFO.cfg' file gets corrupted (your"
+print "name appears blank), you can manually repair the file by entering the"
+print "values below:"
+print
+ink rgb(255,255,255),1
+print "   A sample file would look like this:"
+print
+print "   1"
+print "   Player"
+print "   Ensign"
+print "   1"
+print
+ink rgb(0,255,0),1
+print "*** Contacts: ***"
+ink rgb(0,0,255),1
+print
+print "David A. Scouten"
+print "ZoneSoft Software"
+print "zonemaster@yahoo.com"
+print "http://github.com/zonemaster60/DarkBasic"
+print
+print "Scrollbar code by Alastair Zotos"
+print "http://www.thegamecreators.com"
+print
+print "Convert_Time code by Kevin Picone"
+print "http://www.playbasic.com"
+ink rgb(0,255,255),1
+print
+print "End of Document >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+
+rem move scroll bar
+if mousex()>b1 and mousey()>s1 and mousey()<s1+50 and mouseclick()=1
+   dec s1,10 : inc y1,10
+endif
+if mousex()>b1 and mousey()>s1+25 and mousey()<s1+100 and mouseclick()=1
+   inc s1,10 : dec y1,10
+endif
+
+rem fast move scroll bar
+if mousex()>b1 and mousey()<s1 and mouseclick()=1
+   dec s1,30 : inc y1,30
+endif
+if mousex()>b1 and mousey()>s1+100 and mouseclick()=1
+   inc s1,30 : dec y1,30
+endif
+
+rem update scroll bar
+if s1<0 then s1=0
+if y1>0 then y1=0
+if s1>380 then s1=380
+
+if makebutton_ext(320,460,"DONE!","")>0 then goto exitloop
+
+rem end loop
+sync : loop
+
+exitloop:
+if soundon=1 then play sound 6
+delete image 1 : rem delete sprite 1
+if soundon=1 then play sound 9
+starfield(192,192,192)
+goto mainMenu
+
+rem enter unlock code
+checkUnlockCode:
+code1=get registry("Software\zonesoft-software\CharTrek-TFO","RegCode")
+if code1=val(right$(regcode$,10))
+   regflag=1 : regged$="Registered"
+else
+   if startup=0 then gosub unlockGame
+   regflag=0 : regged$="Demo"
+endif
+return
+
+rem sector generator
+genLevel:
+if regflag=0 then timestart=timer()
+cls rgb(96,96,96) : makebox(320,220,"")
+ink rgb(255,255,0),1 : center text 320,200,"Please wait,"
+ink rgb(0,255,255),1 : center text 320,216,"Generating system data..."
+gosub compSim
+
+randomize timer()
+
+aix=0 : aiy=0
+for count=1 to 100
+restore 00 : gosub readQuadrant
+
+   if quadrant$(aix,aiy)="."
+      numstar=rnd(5)+1
+      for stn=1 to numstar
+         st1x=rnd(9) : st1y=rnd(9) : quadrant$(st1x,st1y)="*"
+      next stn
+   endif
+   if quadrant$(aix,aiy)="."
+      numplan=rnd(3)+1
+      for pln=1 to numplan
+         pl1x=rnd(9) : pl1y=rnd(9) : quadrant$(pl1x,pl1y)="O"
+      next pln
+   endif
+   chkbase=rnd(10)+1
+   if chkbase<=4
+      if quadrant$(aix,aiy)="."
+         numbase=rnd(1)
+         for sbn=1 to numbase
+            sb1x=rnd(9) : sb1y=rnd(9) : quadrant$(sb1x,sb1y)="%"
+         next sbn
+      endif
+   endif
+   chkworm=rnd(10)+1
+   if chkworm<=3
+      if quadrant$(aix,aiy)="."
+         numworm=rnd(1)
+         for wmn=1 to numworm
+            wm1x=rnd(9) : wm1y=rnd(9) : quadrant$(wm1x,wm1y)="@"
+         next wmn
+      endif
+   endif
+   if quadrant$(aix,aiy)="."
+      numsun=rnd(1)
+      for snn=1 to numsun
+         sn1x=rnd(9) : sn1y=rnd(9) : quadrant$(sn1x,sn1y)="o"
+      next snn
+   endif
+   rem save the array
+   numarray$=str$(aix)+str$(aiy)
+   save array "data\system."+numarray$+".dat",quadrant$(0)
+   inc aiy
+   if aiy>9
+      inc aix : aiy=0
+   endif
+next count
+
+ink rgb(0,255,0),1
+center text 320,232,"...All done."
+wait time1
+return
+
+rem enemy health
+enemyHealth:
+ink rgb(0,255,0),1 : enemydamage=rnd(20)+5*difficulty : enemyhealth=enemyhealth-enemydamage
+
+if enemyhealth>0 and weapon=1
+   text 30,446,"Fire control: Lasers fired....Enemy takes "+ str$(enemydamage) + " laser damage!"
+   text 30,462,"Fire control: (Enemy ship integrity = " + str$(enemyhealth)+")"
+endif
+if enemyhealth>0 and weapon=2
+   text 30,446,"Fire control: Torpedo fired....Enemy takes " + str$(enemydamage) + " torpedo damage!"
+   text 30,462,"Fire control: (Enemy ship integrity = " +str$(enemyhealth)+")"
+endif
+if enemyhealth<=0 and weapon=1
+   text 30,446,"Fire control: Lasers fired....direct laser impact on enemy at "+str$(px)+","+str$(py)+"!"
+   text 30,462,"Fire control: (Enemy destroyed)"
+   quadrant$(px,py)="X"
+   dec numenemies : inc enemydestroyed : totalscore=totalscore+10*difficulty : enemyflag=0 : enemyhealth=100
+   if soundon=1 then play sound 3
+   wait time2
+endif
+if enemyhealth<=0 and weapon=2
+   text 30,446,"Fire control: Torpedo fired...direct torpedo impact on enemy at "+str$(tx)+","+str$(ty)+"!"
+   text 30,462,"Fire control: (Enemy destroyed)"
+   quadrant$(tx,ty)="X"
+   dec numenemies : inc enemydestroyed : totalscore=totalscore+10*difficulty : enemyflag=0 : enemyhealth=100
+   if soundon=1 then play sound 3
+   wait time2
+endif
+return
+
+rem routine to select MP3 music file
+selectMP3:
+if loaded=1 then stop music 1
+if soundon=1 then play sound 5
+cls rgb(96,96,96) : ink rgb(255,255,255),1
+makebutton_ext(320,16,"Music/MP3","")
+
+ink rgb(0,255,0),1
+center text 320,40,"[Current MP3 list (26 max)]"
+
+rem reposition mouse cursor
+posMouse()
+
+do
+
+perform checklist for files
+find first
+f_name$(0) = get file name$()
+
+zp=64 : fcount=0 : selected=0
+for a1=1 to checklist quantity()-1
+   find next
+   f_name$(a1) = get file name$()
+   if right$(f_name$(a1),4)=".mp3"
+      if selectfile(320,zp,"["+str$(fcount+1)+"] - ["+f_name$(a1)+"]")>0 then selected=1
+      if selected=1
+         loaded=1 : mp3name$=f_name$(a1)
+         goto dumploop
+      endif
+      zp=zp+15 : inc fcount
+      if fcount>=26 then goto getout
+   else
+   endif
+next a1
+
+getout:
+xp=zp
+ink rgb(255,255,0),1
+center text 320,zp,"Use the mouse to select an MP3"
+if makebutton_ext(320,460,"DONE!","")>0 then goto done01
+
+sync : loop
+
+done01:
+loaded=0 : if soundon=1 then play sound 6
+return
+
+dumploop:
+if soundon=1 then play sound 5
+ink rgb(0,255,0),1 : center text 320,420,"Play '"+mp3name$+"' ?"
+
+do
+
+if makebutton_ext(264,442,"Yes","")>0 then goto dumploop1
+if makebutton_ext(320,442,"No","")>0 then goto selectMP3
+if makebutton_ext(376,442,"Loop","")>0
+   if soundon=1 then play sound 5
+   inc loopon : if loopon>1 then loopon=0
+   wait time3
+endif
+
+set text opaque
+select (loopon)
+   case 0: ink rgb(255,0,0),1 : loopon$="Off " : endcase
+   case 1: ink rgb(0,255,0),1 : loopon$="On  " : endcase
+endselect
+text 411,436,loopon$
+set text transparent
+
+sync : loop
+
+dumploop1:
+if loaded=1 then load music mp3name$,1
+if loaded=1 and loopon=0 then play music 1
+if loaded=1 and loopon=1 then loop music 1
+return
+
+rem about screen and title
+function about01(gvers$)
+cls rgb(96,96,96) : makebox(320,220,"") : ink rgb(0,0,255),1
+center text 320,200,"CharTrek-TFO "+gvers$
+center text 320,216,"ZoneSoft Software"
+center text 320,232,"zonemaster@yahoo.com"
+ink rgb(255,255,0),1
+center text 315,264,"To purposely go where almost no graphics have been before..."
+endfunction
+
+rem menu screen
+function title01(x1,y1,regflag,gvers$)
+ink rgb(0,255,255),1
+text x1,y1,"CharTrek-TFO "+gvers$+" -"
+select (regflag)
+   case 0: ink rgb(255,0,0),1 : regged$="Demo" : endcase
+   case 1: ink rgb(0,255,0),1 : regged$="Registered" : endcase
+endselect
+text x1+135,y1,regged$
+endfunction
+
+rem load sounds
+function loadsound(soundon)
+if path exist("sounds")=1
+   load sound "sounds\alarm.wav",1
+   load sound "sounds\engage.wav",2
+   load sound "sounds\explode.wav",3
+   load sound "sounds\phaser.wav",4
+   load sound "sounds\press.wav",5
+   load sound "sounds\select.wav",6
+   load sound "sounds\torpedo.wav",7
+   load sound "sounds\voidhum.wav",8
+   load sound "sounds\warp.wav",9
+   load sound "sounds\dock.wav",10
+   load sound "sounds\lasergun.wav",11
+   load sound "sounds\radio.wav",12
+   load sound "sounds\clapping.wav",13
+   load sound "sounds\scan.wav",14
+else
+   soundon=0
+endif
+endfunction
+
+rem load/read config file
+function loadconfig(difficulty$,playername$,gamerank$,soundon$)
+if file exist("config\CT-TFO.cfg")=1
+   open to read 1,"config\CT-TFO.cfg"
+      read string 1,difficulty$
+      read string 1,playername$
+      read string 1,gamerank$
+      read string 1,soundon$
+   close file 1
+   difficulty=val(difficulty$)
+   soundon=val(soundon$)
+else
+   playername$="Player" : gamerank$="Ensign"
+   difficulty=1 : soundon=1
+endif
+endfunction
+
+rem save config file
+function saveConfig(difficulty$,playername$,gamerank$,soundon$)
+if file exist("config\CT-TFO.cfg") then delete file "config\CT-TFO.cfg"
+open to write 1,"config\CT-TFO.cfg"
+   write string 1,difficulty$
+   write string 1,playername$
+   write string 1,gamerank$
+   write string 1,soundon$
+close file 1
+endfunction
+
+rem load/read config file
+function loaddebuglist(energy$,hull$,shieldpower$,engines$,enemyhealth$,numcrew$)
+if file exist("config\CT-TFO.debug")=1
+   open to read 1,"config\CT-TFO.debug"
+      read string 1,energy$
+      read string 1,hull$
+      read string 1,shieldpower$
+      read string 1,engines$
+      read string 1,enemyhealth$
+      read string 1,numcrew$
+   close file 1
+   energy=val(energy$) : hull=val(hull$) : shieldpower=val(shieldpower$)
+   engines=val(engines$) : enemyhealth=val(enemyhealth$) : numcrew=val(numcrew$)
+endif
+endfunction
+
+sector:
+data "+",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+00:
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."
+data ".",".",".",".",".",".",".",".",".","."

@@ -1,0 +1,73 @@
+Rem * Title  : Free Flight Example
+Rem * Author : DBS-LB
+Rem * Date   : 25th June 2000
+rem this program shows free flight movement
+autocam off : hide mouse
+sync on : disable escapekey
+
+rem make wire sky sphere
+make object sphere 1,5000
+set object 1,0,0,0
+
+rem scale sphere to make it bigger
+scale object 1,300,300,300
+
+rem make flying object
+make object box 2,150,5,20
+make mesh from object 2,2
+delete object 2
+make object box 2,25,15,100
+add limb 2,1,2
+position object 2,0,0,500
+
+rem make drone to mark a back position
+make object sphere 3,10
+
+rem set camera range
+set camera range 1,15000
+
+rem set text font
+set text font "Arial"
+ink rgb(255,255,0),0
+set text size 15
+
+rem main loop
+do
+
+   rem user info
+   center text 320,5,"FREE FLIGHT ORIENTATION"
+   center text 320,20,"Move the mouse to Turn, Pitch, and Roll."
+   center text 320,35,"Press 'W' and 'S' to move Forward and Backward."
+   center text 320,50,"Press RETURN to Reset orientation."
+   center text 320,65,"To exit, press the SPACEBAR."
+
+   rem control object camera (mouselook)
+   pitch object down 2,mousemovey()
+   turn object right 2,mousemovex()
+   roll object right 2,mousemovez()
+
+   rem keys to move forward, back, and reset
+   if inkey$()="w" then move camera 20 : move object 2,20
+   if inkey$()="s" then move camera -20 : move object 2,-20
+   if returnkey()=1 then rotate object 2,0,0,0
+
+   rem get back position of object for camera
+   pitch object down 2,11
+   move object 2,-150
+   position object 3,object position x(2),object position y(2),object position z(2)
+   move object 2,150
+   pitch object up 2,11
+
+   rem place camera and set orientation to object
+   position camera object position x(3),object position y(3),object position z(3)
+   set camera to object orientation 2
+
+   rem exit from loop
+   if spacekey()=1 then goto exitloop
+
+   rem update screen
+   sync : loop
+
+rem exit from loop
+exitloop:
+end

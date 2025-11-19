@@ -1,0 +1,164 @@
+` This code was downloaded from The Game Creators
+` It is reproduced here with full permission
+` http://www.thegamecreators.com
+
+`syncronize
+sync on
+
+`variables
+y=0
+s=0
+b=620
+
+`scroll bar
+ink rgb(128,128,128),1
+box 0,0,20,100
+get image 1,0,0,20,100
+
+`main loop
+do
+
+`get sprite from scroll bar
+sprite 1,b,s,1
+
+`print stuff
+cls 0
+ink rgb(0,255,255),1
+set cursor 0,y
+
+print "Starwraith Mission Editor"
+print "version 1.2 by David Scouten"
+print "original file contents created by Shawn Bower"
+print
+print ">>>"
+print
+print "Instructions on installing are simple, install the contents of the"
+print "self-extracting file Install_SWMEdit.exe anywhere you want. :)"
+print "There is an export feature which will allow you to EXPORT the file"
+print "to any directory. (preferrably your \StarWraith or \StarWraith4"
+print "folder or wherever you have installed these games)"
+print
+print "I have included 2 sample missions which you can use to create your"
+print "own missions. These can be edited and saved."
+print "sample_sw3.swm (for Starwraith: Shadows of Orion missions)"
+print "sample_sw4.swm (for Starwraith: Reviction missions)"
+print
+print "I suggest you save with a different filename so you don't overwrite"
+print "the sample missions."
+print
+print "You can delete template3.swm and template4.swm they are no longer"
+print "used by the editor. The editor NOW requires you to load a mission"
+print "first before you can edit or save a mission. ;)"
+print
+print "However, you CAN delete, export or create a new mission without"
+print "having to load a mission first."
+print
+print ">>>"
+print
+print "This is a mission template for creating your own scripted scenarios."
+print "Use the instructions included in this template to create your own"
+print "missions. Simply modify the variables below and save this file under"
+print "a different name. You can load up to 14 missions to create your own"
+print "campaigns."
+print
+print ">>>"
+print
+print "This option sets the level of enemy skill, range is 0-5, for a major"
+print "challenge, set to 4 or 5."
+print "ai=3"
+print "This variable activates the combat mode. Always leave as one unless"
+print "no other fighters are present."
+print "c=1"
+print "This indicates the number of enemy fighters per wave."
+print "e=5"
+print "This indicates whether an enemy capital ship is present or not."
+print "When 1 is used, the last 4 enemy fighter slots will be set to gun"
+print "turrets."
+print "ec=0"
+print "This indicates how many waves of fighters will warp in."
+print "w=3"
+print "This activates the nebula environment. Only one environment should"
+print "be activated at a time."
+print "n=0"
+print "This activates the asteroid environment."
+print "a=0"
+print "This activates the asteroid cave environment and sets enemy fighters"
+print "to turrets."
+print "ac=0"
+print "This sets the distance from opposing forces for fighter engagements"
+print "If greater then 3000, a waypoint will be established and combat"
+print "systems will remain passive until you get within sensor range."
+print "d=1500"
+print "This activates the escort, joint strike, and intercept mode."
+print "A value of 1 or 5 selects ship escort. (from or to a location)"
+print "A value of 2 selects escort back to carrier."
+print "A value of 3 selects a joint strike mission with another outside"
+print "squadron."
+print "A value of 4 selects intercept mode, friendly forces must intercept"
+print "inbound torpedoes."
+print "A value of 7 selects rescue mode, you will need to recover a pilot"
+print "ejection pod."
+print "es=0"
+print "This selects the enemy type, UFA-25/UFA-80 selects Federation forces"
+print "Alien selects Vonari forces, Mixed selects fighters and cargo units,"
+print "Cargo selects cargo units only."
+print "et=UFA-25/UFA-80"
+print "This selects whether a planet is present or not. Set to 1 to activate"
+print "p=0"
+print "If a planet is present, these variables set its position. Place the"
+print "planet fairly far out, or friendly forces are destroyed immediately"
+print "upon launch if they're inside the planet."
+print "px=-5000"
+print "py=-1000"
+print "pz=2000"
+print "This variable selects whether the mission will be over terrain or"
+print "not. Planet must be present to use this option."
+print "t=0"
+print "This sets the number of friendly fighters in your squadron."
+print "f=4"
+print "This tells the game how many lines of mission briefing text to read."
+print "This needs to be accurate and the mission briefing text should"
+print "immediately follow the 'l' setting with no line exceeding about 59"
+print "characters in length, otherwise your text will leave the window."
+print "l=4"
+print "The AC system is now vulnerable to attack since we ignored"
+print "the clan's request for assistance which resulted in major"
+print "casualties.  Fortunately, we have arrived in time to offer"
+print "assistance against the Federation invasion force."
+print
+print ">>>"
+print
+print "zonemaster@blackiceklan.com"
+print "StarWraith is copyrighted and owned by Shawn Bower"
+print "of StarWraith 3D games."
+
+`move scroll bar
+if mousex()>b and mousey()>s and mousey()<s+50 and mouseclick()=1
+dec s,10
+inc y,10
+endif
+if mousex()>b and mousey()>s+25 and mousey()<s+100 and mouseclick()=1
+inc s,10
+dec y,10
+endif
+
+`fast move scroll bar
+if mousex()>b and mousey()<s and mouseclick()=1
+dec s,30
+inc y,30
+endif
+if mousex()>b and mousey()>s+100 and mouseclick()=1
+inc s,30
+dec y,30
+endif
+
+`update scroll bar
+if s<0 then s=0
+if y>0 then y=0
+if s>380 then s=380
+
+`end loop
+sync
+loop
+
+

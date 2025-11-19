@@ -1,0 +1,169 @@
+Rem * Title  : Convert Milliseconds to Times (sec/min/hours)
+Rem * Author : Kevin Picone
+Rem * Date   : 15,Sep,2002
+` *=---------------------------------------------------------------------=*
+          Title$= "Timer Conversion Functions":   Version$= "V0.01"
+` *=---------------------------------------------------------------------=*
+`
+`                              By Kevin Picone
+`
+`                                15,Sep,2002
+`
+`         (c) Copyright 2002, By Kevin Picone, All Rights Reserved.
+`
+` *=---------------------------------------------------------------------=*
+`    Email:  picone@centercom.com.au      URL: www.uwdesign.50megs.com
+` *=---------------------------------------------------------------------=*
+`
+`
+`  So WHAT does this do ?:
+`  =======================
+`
+`    These are just a couple of functions to convert a Timer(milli seconds)
+` value into min/sec/hours formats.
+`
+`    If you need different format or special cases you be should and edit
+` the functions yourself. I.e Say if you wanted to only display timer
+` as minutes, or as seconds.. The calc's are hopefully pretty easy to
+` follow.
+`
+`    Anyway, have fun !
+`
+`
+`  Free  License  Agreement.
+`  =========================
+`
+`  * The user / developer agrees to include a visible credit to
+`    "Kevin Picone" and provide a link to Underware Design's web site,
+`    within your programs Documentation and/or upon the developers Web
+`    Site.  
+`
+`  * The user / developer agrees to NOT release derivative works in
+`    whole or in part of this source code, or Port this source code to
+`    other languages or platforms, without the prior written consent from
+`    the author "Kevin Picone"
+`
+`  * The user / developer agrees to NOT offer this source code for Sale.
+`
+
+`  * Providing the User / Developer agrees in full to the previous FREE
+`    license Agreement clauses, the user / developer may use this source
+`    code FREELY in their products, commercial or otherwise. 
+`
+`
+`
+`  Cya,
+`  Kevin Picone
+`  picone@centercom.com.au
+`  www.uwdesign.50megs.com
+`  www.thedrummachine.50megs.com
+`  pub101.ezboard.com/buwdesign   (uwdesign forum)
+`
+` *=---------------------------------------------------------------------=*
+
+` *=---------------------------------------------------------------------=*
+
+
+
+ Sync on
+ sync rate 0
+
+
+   ts=timer()
+
+Do
+   cls 0
+
+
+   t=timer()-ts
+
+   print "Timer Value:";t
+   print
+   print " Timer as Hours/Mins/Seconds:";Convert_Timer_To_HMS(t,0)
+   print " Timer as Seconds/Mins/Hours:";Convert_Timer_To_HMS(t,1)
+
+   print
+
+   print " Timer as Mins/Seconds:";Convert_Timer_To_MS(t,0)
+   print " Timer as Seconds/Mins:";Convert_Timer_To_MS(t,1)
+
+
+
+
+
+   sync
+
+
+loop
+
+
+
+
+
+
+` *=---------------------------------------------------------------------=*
+`                  >> Convert Timer to Hours/Mins/Seconds <<
+` *=---------------------------------------------------------------------=*
+`
+`  This fucnction will convert a milli seconds timer value into digital
+` time format.  This version supports Hours/Minutes and Seconds.
+`
+`
+` *=---------------------------------------------------------------------=*
+
+
+Function Convert_Timer_To_HMS(ticks,format)
+
+    Seconds=ticks/1000
+    Minutes=mod((Seconds/60),60)
+    Hours=mod((seconds/3600),24)
+
+    Seconds=mod(seconds,60)
+
+    h$=Right$("00"+Str$(hours),2)
+    m$=Right$("00"+Str$(minutes),2)
+    s$=Right$("00"+Str$(seconds),2)
+
+      if format=0
+       result$=h$+":"+m$+":"+s$
+      else
+       result$=s$+":"+m$+":"+h$
+      endif
+
+EndFunction result$
+
+
+` *=---------------------------------------------------------------------=*
+`                     >> Convert Timer to Mins/Seconds <<
+` *=---------------------------------------------------------------------=*
+`
+`  This fucnction will convert a milli seconds timer value into digital
+` time format.  This version supports Minutes and Seconds.
+`
+`
+` *=---------------------------------------------------------------------=*
+
+
+Function Convert_Timer_To_MS(ticks,format)
+
+    Seconds=ticks/1000
+    Minutes=mod((Seconds/60),60)
+    Seconds=mod(seconds,60)
+    m$=Right$("00"+Str$(minutes),2)
+    s$=Right$("00"+Str$(seconds),2)
+
+      if format=0
+       result$=m$+":"+s$
+      else
+       result$=s$+":"+m$
+      endif
+
+EndFunction result$
+
+
+
+function Mod(Val1,val2)
+    result=val1-((val1/val2)*val2)
+endfunction result
+
+

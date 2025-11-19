@@ -1,0 +1,501 @@
+rem Multiplayer Example from Connection to Gameplay
+rem by Shawn of StarWraith 3D Games (starwraith3dgames@att.net)
+rem www.starwraith.com
+rem A complete multiplayer routine illustrating a text chatbox and gamestate
+rem Provided free for use in your projects (commercial or otherwise).
+rem You're welcome to modify and use this code however you wish.
+rem A short credit in your project indicating where you got the core
+rem code from is appreciated, but not required.
+rem I do ask that you please provide me with a copy of the project you
+rem use this code in as I like to see what others come up with.
+rem _____________________________________________________
+rem This was designed on and intended for use with DarkBasic 1.13 with
+rem the enhancement pack, it has not been tested with other versions.
+rem I've tried to make the code easy to understand and relatively
+rem modular so you can cut and paste sections of it for easy implementation
+rem into your projects. It's designed around a line by line style with
+rem comments to help make it easier to understand what is being done.
+rem A lot of integrity checks are in this example also.
+rem _____________________________________________________
+rem To use this example, the host should start a session first and make
+rem sure the correct IP address is used, or the client won't be able
+rem to find the game and they will just automatically start another
+rem session on whatever IP they enter.
+rem This basic example does not include things like packet rate throttling
+rem or sophisticated movement prediction, it merely illustrates how to
+rem design a chat room for your game and monitoring gamestate for player
+rem objects. This example does not require any external media, it is
+rem designed to work as stand-alone, so you can just hit F5 and run it.
+rem Note: there are many ways to accomplish the same routines, this is
+rem just an example to illustrate the concept. It's design is for
+rem simplicity, not efficiency or complexity.
+rem _____________________________________________________
+rem Remember that IP addresses can be blocked by routers or firewalls,
+rem so if you're trying to get this to work over the internet using
+rem broadband connections, you may need to open ports or use a DMZ
+rem Refer to your router or firewall's documentation on how to do this.
+rem Using a DMZ or opening ports can reduce the security for your
+rem network/internet connection, so you do so at your own risk.
+rem _____________________________________________________
+rem Using this as a foundation, you can further enhance multiplayer for
+rem your project with movement prediction to smooth out the motion and
+rem reduce jerkiness. You can do this by measuring how far a player
+rem moves between packets, then predict the same movement prior to receiving
+rem the next packet. Doing this for rotations also will further smooth the
+rem overall movement and accuracy of gameplay.
+rem You can use these same concepts for all needed weapon data and can
+rem add such data to the existing data packet to keep things simple.
+rem For more detailed instructions, refer to the Multiplayer Tutorial I
+rem wrote (contact me if you'd like a copy in HTML format).
+rem _____________________________________________________
+rem You can use the Window mode settings below if you want to
+rem compile and run this example in a window to test multiple copies
+rem of it on your local IP address. You can alt-tab between them as
+rem needed and space them across a 1280X960 or larger desktop.
+rem set window on:always active on
+
+
+rem __________________BEGIN MULTIPLAYER EXAMPLE_________________
+
+rem set a few display parameters
+rem use sync
+sync on
+rem overstep sync rate by two for consistent performance (30+2)
+sync rate 32
+rem set black backdrop and no camera tracking when creating objects
+backdrop on
+color backdrop 0
+autocam off
+draw to front
+set text font "arial"
+set text size 12
+set text transparent
+set camera range 1,3000
+hide mouse
+
+rem DIM a few variables we will need to use
+dim mpgot(10)
+dim zchat$(20)
+
+rem **** SET THE MULTIPLAYER VARIABLES
+rem use the 'packetrate' variable for a set packet exchange rate
+rem you can check for ping rates or exchange rates and throttle this
+rem setting on the fly to reduce lag or poor performance
+rem this is in milliseconds, 250 means 4 packets per second, ok for internet
+rem gameplay with a few players
+packetrate=250
+
+rem **** CREATE GAME WORLD
+rem Let's create a small world for our game to take place
+rem first a nice blue background sky sphere
+rem draw all 2D graphics used for textures off-screen to boost speed
+create bitmap 1,256,256
+set current bitmap 1
+for i = 0 to 127
+ink rgb(i,i*2,255),0
+line 0,i,256,i
+next i
+ink rgb(127,255,255),0
+for i = 128 to 256:line 0,i,256,i:next i
+get image 1,0,0,256,256
+cls
+
+rem now some simple terrain
+ink rgb(128,170,0),0
+for i = 0 to 256:line 0,i,256,i:next i
+for i = 0 to 5000
+s=130+rnd(80)
+ink rgb(s-42,s,0),0
+dot rnd(255),rnd(255)
+next i
+get image 2,0,0,256,256
+delete bitmap 1
+set current bitmap 0
+
+rem now that we've got the textures, create the environment objects
+make object sphere 1,1000
+texture object 1,1
+set object 1,1,1,0,1,0,0
+make object plain 2,2000,2000
+texture object 2,2
+scale object texture 2,10,10
+xrotate object 2,90
+position object 2,0,-20,0
+set ambient light 100
+
+rem now create 8 objects to represent 8 players
+rem low number players will be blue boxes which fade to
+rem red with higher number players
+for i = 0 to 7
+make object cone 10+i,5
+color object 10+i,rgb(i*30,0,210-(i*30))
+xrotate object 10+i,90
+fix object pivot 10+i
+
+rem make sure to hide player objects not in use
+hide object 10+i
+next i
+
+rem make sure the camera is in the center of the world
+position camera 0,0,0
+
+rem **** FIND THE TCP/IP CONNECTION TYPE
+rem sample code to setup a net connection
+perform checklist for net connections
+sync:sleep 50
+netsel=0
+nettotal=checklist quantity()
+for a = 1 to nettotal
+
+rem find the connection for TCP/IP internet
+if checklist string$(a)="Internet TCP/IP Connection For DirectPlay" then netsel=a
+next a
+
+rem if TCP/IP wasn't found and netsel=0, which can occur on non-english
+rem versions of windows, set the netsel variable to the last detected
+rem connection type which is almost always TCP/IP anyway
+if netsel=0 then netsel=nettotal
+
+rem if no connections detected and netsel still equals 0, stop the program
+if netsel=0 then end
+
+rem **** USE WHATEVER ENTRY ROUTINE TO LET THE PLAYER SELECT THE IP ADDRESS
+rem now let the player enter the IP address they want to use
+ask4ip:
+ky$=entry$()
+if ky$="" then goto msync0
+clear entry buffer
+if right$(ky$,1)=chr$(13) then add$=chat$:chat$="":goto gotip
+if right$(ky$,1)=chr$(8) then chat$=left$(chat$,len(chat$)-1):ky$=""
+if len(chat$)>30 then ky$="":goto msync0
+chat$=chat$+ky$
+ky$=""
+msync0:
+ink rgb(255,255,255),0
+text 10,10,"Enter IP address to connect to: "+chat$+"_"
+sync
+goto ask4ip
+
+gotip:
+sleep 500
+ky$=""
+
+rem now let the player select the name they want to use
+ask4name:
+ky$=entry$()
+if ky$="" then goto msync1
+clear entry buffer
+if right$(ky$,1)=chr$(13) then goto gotname
+if right$(ky$,1)=chr$(8) then playername$=left$(playername$,len(playername$)-1):ky$=""
+if len(playername$)>10 then ky$="":goto msync1
+playername$=playername$+ky$
+ky$=""
+msync1:
+ink rgb(255,255,255),0
+text 10,10,"IP Address selected: "+add$
+text 10,20,"Enter the name you want to use: "+playername$+"_"
+sync
+goto ask4name
+
+gotname:
+rem **** ESTABLISH MULTIPLAYER CONNECTION
+rem now establish the connection using the connection type and IP address
+for i = 0 to 5
+text 10,50,"Establishing connection to: "+add$
+sync
+next i
+set net connection netsel,add$
+
+for i = 0 to 5
+text 10,70,"Connection established..."
+sync
+next i
+
+rem **** NOW SCAN THE CONNECTION FOR EXISTING GAMES
+rem check for active games on the IP address the player just connected to
+perform checklist for net sessions
+if checklist quantity()<1 then game$="None":goto nogame
+game$=checklist string$(1)
+
+nogame:
+rem if a game doesn't already exit, let the player host
+rem otherwise, joining the existing game is the only option
+rem NOTE: you can hault the process here to let the player select
+rem from a series of active games, or manually start hosting
+rem this example just automates the process based on what is detected
+if game$="None" then goto setashost
+for i = 0 to 30
+text 10,85,"Active session detected on this IP..."
+text 10,100,"Joining active session as client..."
+sync
+next i
+join net game 1,playername$
+
+rem now send a greeting message that a new player has joined
+rem this example will use MESSAGE= as a flag for a text message for the
+rem chat sequence of this multiplayer routine
+rem send messages three times to make sure it gets through
+rem using the 0 flag will send the message to all players
+for i = 0 to 2
+send net message string 0,"MESSAGE="+playername$+" has joined the game!"
+sync
+next i
+cls
+
+rem get general timer for exchange rate
+tmm=timer()
+oldtmm=tmm
+goto multimain
+
+setashost:
+rem if game$="None" then this section starts a new game on this IP address
+rem The 8 is the maximum number of players, 1 is for peer-to-peer
+rem client/server is another connection option which routes all data
+rem traffic through the host's computer instead of letting each player's
+rem system talk directly to every other player's system
+for i = 0 to 70
+text 10,85,"No session detected on this IP..."
+text 10,100,"Creating multiplayer session as host..."
+sync
+next i
+create net game "Multiplayer Game #1",playername$,8,1
+cls
+tmm=timer()
+oldtmm=tmm
+
+multimain:
+ink rgb(255,255,255),0
+text 300,0,"Use Arrow keys to move around..."
+text 300,20,"Type text messages and press enter to send..."
+
+rem get a continuous list of all players
+text 10,10,"Current players:"
+perform checklist for net players
+totalplayers=checklist quantity()
+for i = 1 to totalplayers
+
+rem now save each player's unique ID number to the MPGOT array
+rem to help keep track of each specific player more accurately
+mpgot(i-1)=checklist value b(i)
+
+rem grab the name of each player in the session
+name$=checklist string$(i)
+
+rem if name on the list matches this player, get the unique ID number as
+rem we'll need it later for transmitting packets
+if name$=playername$ then playernum=checklist value b(i)
+
+rem display each name in the upper left of the screen
+text 10,10+(i*10),name$
+next i
+
+rem display any messages in the chatbox queue
+for i = 0 to 13
+text 10,200+(i*10),zchat$(i)
+next i
+
+rem rpackets is how many packets we're receiving this cycle, if we receive
+rem a packet, we want to skip sending a packet for this sync. this helps
+rem reduce packet overload and the resulting lag.
+rpackets=0
+
+rem check for disconnect, exit as needed
+if net game lost()=1 then for i = 0 to 90:text 10,450,"Connection lost...":sync:next i:end
+
+rem search/scan for new messages
+keepchecking:
+get net message
+message$=net message string$()
+
+rem if no net message received, then leave scan routine
+if message$="" then goto scrappacket
+
+rem if a message is detected, apply it to the chatbox array line by line
+if left$(message$,8)<>"MESSAGE=" then goto notamessage
+mess$=right$(message$,len(message$)-8)
+
+rem if it is a duplicate message, just discard
+if zchat$(13)=mess$ then goto scrappacket
+
+rem if it's a new message, scroll the chatbox and add the message
+for i = 0 to 12:zchat$(i)=zchat$(i+1):next i
+zchat$(13)=mess$
+
+rem add one to the received packets variable to indicate we got one
+rpackets=rpackets+1
+goto baddata
+
+notamessage:
+rem **** DATA PACKET RECEIVE ROUTINE
+rem lets assign this data packet to a shorter variable, pc$
+pc$=message$
+
+rem DECODE MULTIPLAYER PACKET
+rem we'll use decod for the character position when analyzing the packet
+rem start at the first character
+decod=1
+
+rem we'll use plyr$ for the player ID number
+rem mx$, my$, and mz$ will be used to store the player's position
+rem max$, may$, and maz$ will be used to store the player's rotation angles
+rem angle Z is included in this example, but isn't required
+rem reset variables to null values every time a packet is received
+plyr$="":mx$="":my$="":mz$="":max$="":may$="":maz$=""
+
+rem this routine will scan each packet character until the seperator
+rem character is encountered. Once the seperator is encountered, the
+rem variable has been stored and is ready for use. We'll use "|" as
+rem the seperator in our packet structure. The first step is
+rem to get the player ID number this packet is for:
+getplayernum:
+mpp$=mid$(pc$,decod)
+if mpp$="|" then goto setmvplyr else goto nomvplyr
+setmvplyr:
+decod=decod+1
+
+rem we'll use mvplyr to indentify which player slot this packet is for
+mvplyr=-1
+for i = 1 to totalplayers
+
+rem now compare the plyr$ result with the numbers we stored in the
+rem mpgot array. Find the one is matches, then identify who the
+rem packet is for using the mvplyr variable (will be in the 0-7 range)
+rem make sure to stick to string values, if you try to convert the
+rem plyr$ variable to a number using val(), you will encounter mismatches
+rem because the result can get reduced by several digits. You can convert
+rem large numbers stored in non-string variables to strings, but you
+rem can't go the other way without risking inaccurate results.
+if plyr$=str$(mpgot(i-1)) then mvplyr=i-1
+next i
+
+rem since we received a data packet, add one to our rpackets counter
+rpackets=rpackets+1
+
+rem now that we have the player number, continue analyzing the rest of the
+rem packet starting with the X position (saved to mx$) of the player
+goto getmx
+nomvplyr:
+plyr$=plyr$+mpp$
+decod=decod+1
+goto getplayernum
+getmx:
+mpp$=mid$(pc$,decod)
+if mpp$="|" then decod=decod+1:goto getmy
+mx$=mx$+mpp$
+decod=decod+1
+goto getmx
+getmy:
+mpp$=mid$(pc$,decod)
+if mpp$="|" then decod=decod+1:goto getmz
+my$=my$+mpp$
+decod=decod+1
+goto getmy
+getmz:
+mpp$=mid$(pc$,decod)
+if mpp$="|" then decod=decod+1:goto getmax
+mz$=mz$+mpp$
+decod=decod+1
+goto getmz
+getmax:
+mpp$=mid$(pc$,decod)
+if mpp$="|" then decod=decod+1:goto getmay
+max$=max$+mpp$
+decod=decod+1
+goto getmax
+getmay:
+mpp$=mid$(pc$,decod)
+if mpp$="|" then decod=decod+1:goto getmaz
+may$=may$+mpp$
+decod=decod+1
+goto getmay
+getmaz:
+mpp$=mid$(pc$,decod)
+if mpp$="|" then decod=decod+1:goto gotvariables
+maz$=maz$+mpp$
+decod=decod+1
+goto getmaz
+
+gotvariables:
+rem Now position the identified player's object where it needs to be
+if mvplyr=-1 then goto baddata
+mppx#=val(mx$)
+mppy#=val(my$)
+mppz#=val(mz$)
+mpmx#=val(max$)
+mpmy#=val(may$)
+mpmz#=val(maz$)
+position object 10+mvplyr,mppx#,mppy#,mppz#
+rotate object 10+mvplyr,mpmx#,mpmy#,mpmz#
+
+rem if we receive a packet for a player not currently visible, show object
+rem if a player leaves, you can detect that event and hide the object
+if object visible(10+mvplyr)=0 then show object 10+mvplyr
+
+baddata:
+rem then check for any remaining messages
+if net message exists()=1 then goto keepchecking
+
+scrappacket:
+rem monitor any chat messages the player enters to broadcast to other players
+text 10,400,">"+chat$+"_"
+ky$=entry$()
+if ky$="" then goto msync2
+clear entry buffer
+if right$(ky$,1)=chr$(13) then chatb$=chat$:chat$="":broadcast=3:goto msync2
+if right$(ky$,1)=chr$(8) then chat$=left$(chat$,len(chat$)-1):ky$=""
+if len(chat$)>55 then ky$="":goto msync2
+chat$=chat$+ky$
+ky$=""
+msync2:
+
+if broadcast=0 or rpackets>0 then goto skipbroad
+tmm=timer()
+if tmm<oldtmm+packetrate then goto nodatapacket
+
+rem send message packet 3 times to make sure it gets delivered
+send net message string 0,"MESSAGE="+chatb$
+
+rem now on the last send, add this message to the chatbox as needed
+if broadcast=1 then for i = 0 to 12:zchat$(i)=zchat$(i+1):next i:zchat$(13)=chatb$
+broadcast=broadcast-1
+oldtmm=timer()
+goto nodatapacket
+skipbroad:
+
+rem **** SEND DATA PACKET ROUTINE
+rem if no message is being sent, send data packet instead
+rem you can also just send a data packet right after a message packet,
+rem just wait until after the next sync before doing so.
+rem this also runs a slightly higher risk of causing lag, but maintains
+rem gamestate data a little better at low exchange rates
+tmm=timer()
+
+rem if the packetrate time hasn't been reached yet, delay sending data
+rem to prevent overloading the connection and causing lag
+if tmm<oldtmm+packetrate or rpackets>0 then goto nodatapacket
+
+rem now generate a data packet with this player's position and
+rem rotation using the | character as a seperator for the variables
+pc$=str$(playernum)+"|"
+pc$=pc$+str$(camera position x())+"|"
+pc$=pc$+str$(camera position y())+"|"
+pc$=pc$+str$(camera position z())+"|"
+pc$=pc$+str$(camera angle x())+"|"
+pc$=pc$+str$(camera angle y())+"|"
+pc$=pc$+str$(camera angle z())+"|"
+send net message string 0,pc$
+oldtmm=timer()
+
+nodatapacket:
+rem allow the player to move around using the arrow keys
+if upkey()>0 then move camera 0.4
+if downkey()>0 then move camera -0.4
+if rightkey()>0 then yrotate camera wrapvalue(camera angle y()+2)
+if leftkey()>0 then yrotate camera wrapvalue(camera angle y()-2)
+
+rem recenter sky sphere
+position object 1,camera position x(),camera position y(),camera position z()
+
+rem now we're ready to update the gamestate and refresh the screen
+sync
+goto multimain

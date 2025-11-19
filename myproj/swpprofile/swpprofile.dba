@@ -1,0 +1,586 @@
+Rem * Title  : Starwraith Pilot Profiler
+Rem * Author : David Scouten
+Rem * Date   : 11-07-2004,2015
+rem Starwraith Pilot Profiler
+rem Lets you manage (save) multiple pilots
+rem by David Scouten
+sync on : sync rate 0
+disable escapekey
+
+#include "..\zs_functions.dba"
+
+rem version number
+ver$="1.11"
+
+rem define profiler variables
+lcount=10 : edit=0 : x2=0 : zp=0 : xp=0 : ynflag=0 : soundoff=0
+toggle=0 : fcount=0 : import=0 : accu=0 : loaded=0
+fname$="*none*" : fsave$=fname$ : newfile$="" : action$=""
+pfolder$="profiles" : skey$="ON" : wname$="" : wsave$=wname$
+
+dim varSWP$(100) : dim f_name$(100)
+set text font "Arial" : set text size 8
+
+rem make backup of pilot.sw and weapon.sw
+if file exist("pilot.sw.bak")=0 then copy file "pilot.sw","pilot.sw.bak"
+if file exist("weapon.sw.bak")=0 then copy file "weapon.sw","weapon.sw.bak"
+
+rem load sounds (build)
+load sound "press.wav",1
+load sound "voidhum.wav",2
+load sound "phaser.wav",3
+load sound "reload.wav",4
+load sound "alarm.wav",5
+load sound "crickets.wav",6
+load sound "lasergun.wav",7
+load sound "clapping.wav",8
+load sound "select.wav",9
+
+rem play main menu sound
+loop sound 2
+
+rem set profiles path
+if path exist(pfolder$)=1
+   set dir pfolder$
+else
+   make directory pfolder$
+   set dir pfolder$
+endif
+
+rem main menu loop
+_mmenuSWP:
+do
+cls
+
+rem main menu text
+ink rgb(0,0,255),1 : set text size 23
+center text 320,10,"StarWraith Pilot Profiler"
+ink rgb(0,255,0),1 : set text size 14
+center text 320,50,"Main Menu"
+ink rgb(255,255,0),0 : box 320-102,185-34,320+102,185+34
+ink rgb(0,0,255),0 : box 320-100,185-32,320+100,185+32
+ink rgb(0,255,0),1 : center text 320,153,"File Status"
+ink rgb(255,255,0),0 : box 320-102,335-34,320+102,335+120
+ink rgb(0,0,255),0 : box 320-100,335-32,320+100,335+118
+
+rem show and operate buttons
+buttonselected=0
+if makebutton(110,110,"Load Profile")>0 then buttonselected=1
+if makebutton(320,110,"Save Profile")>0 then buttonselected=2
+if makebutton(530,110,"Delete Profile")>0 then buttonselected=3
+if makebutton(110,185,"Import Pilot")>0 then buttonselected=4
+if makebutton(530,185,"Export Profile")>0 then buttonselected=5
+if makebutton(110,260,"Help/Donate")>0 then buttonselected=6
+if makebutton(320,260,"Quit Profiler")>0 then buttonselected=7
+if makebutton(530,260,"Information")>0 then buttonselected=8
+if makebutton(110,421,"Quit and Launch StarWraith")>0 then buttonselected=9
+
+rem detect button selection
+if buttonselected=1 then goto _loadSWP
+if buttonselected=2 then goto _saveSWP
+if buttonselected=3 then goto _deleteSWP
+if buttonselected=4 then goto _importSWP
+if buttonselected=5 then goto _exportSWP
+if buttonselected=6 then goto _helpSWP
+if buttonselected=7 then goto _quitSWP
+if buttonselected=8 then goto _aboutSWP
+if buttonselected=9 then goto _launchSWP
+
+rem profiler status
+set text size 8
+if right$(fname$,3)=".sw"
+   loaded=1 : ink rgb(0,255,0),1
+   center text 320,193,"*Profile loaded. Ready.*"
+   center text 320,178,"Profile = ["+varSWP$(2)+"]"
+else
+   loaded=0 : ink rgb(255,0,0),1
+   center text 320,193,"*Please load a profile first.*"
+   center text 320,178,"Profile = [*none*]"
+endif
+
+rem display pilot stats
+ink rgb(0,255,0),1 : set text size 14
+center text 320,303,"Pilot Stats"
+ink rgb(0,255,255),1 : set text size 8
+
+if loaded=1
+   center text 320,323,"Squadron Kills: "+str$(val(varSWP$(4)))
+   center text 320,338,"Personal Kills: "+str$(val(varSWP$(5)))
+   center text 320,353,"Total Shots Fired: "+str$(val(varSWP$(6)))
+   center text 320,368,"Total Shots Hit: "+str$(val(varSWP$(7)))
+   if accu<>0
+      accu=val(varSWP$(7))/val(varSWP$(6))*100
+   else
+      accu=0
+   endif
+   center text 320,383,"Pilot Accuracy: "+str$(accu)+"%"
+   center text 320,398,"Mission Failures: "+str$(val(varSWP$(9)))
+else
+   center text 320,323,"Squadron Kills: 0"
+   center text 320,338,"Personal Kills: 0"
+   center text 320,353,"Total Shots Fired: 0"
+   center text 320,368,"Total Shots Hit: 0"
+   center text 320,383,"Pilot Accuracy: 0%"
+   center text 320,398,"Mission Failures: 0"
+endif
+
+rem display sound status
+ink rgb(0,255,255),1 : set text size 8
+center text 320,418,"Sound: "+skey$
+center text 320,433,"(Press F1 to toggle sound)"
+center text 320,460,"Version "+ver$
+
+rem toggles sound on and off
+if scancode()=59 and toggle=0
+   toggle=1 : soundoff=1
+   stop sound 2 : skey$="OFF"
+else
+   if scancode()=59 and toggle=1
+      toggle=0 : soundoff=0
+      loop sound 2 : skey$="ON"
+   endif
+endif
+
+sync : loop
+
+rem load the file
+_loadSWP:
+import=0 : if soundoff=0 then play sound 1
+action$="Load profile" : gosub _viewList
+fname$=f_name$(a) : wname$="weapon."+f_name$(a)
+gosub _load1SWP
+if soundoff=0 then play sound 7
+drawBox(102,34,102,34) : ink rgb(0,255,0),1
+center text 320,210,"["+fname$+"] loaded."
+_noFile:
+gosub _pauseSWP : goto _mmenuSWP
+
+rem save the pilot
+_saveSWP:
+import=0 : if soundoff=0 then play sound 1
+edit=0 : gosub _noMission
+action$="Save profile" : gosub _viewList
+fname$=f_name$(a) : wname$="weapon."+f_name$(a)
+gosub _save1SWP : goto _mmenuSWP
+
+rem delete a pilot
+_deleteSWP:
+import=0 : if soundoff=0 then play sound 1
+action$="Delete profile" : gosub _viewList
+fname$=f_name$(a) : wname$="weapon."+f_name$(a)
+
+if file exist(fname$)=1
+   drawBox(102,34,102,34) : ink rgb(255,0,0),1
+   center text 320,205,"Delete ["+fname$+"]."
+   center text 320,220,"Are you sure?"
+   gosub _yesnoSWP
+   if ynflag=0
+      if soundoff=0 then play sound 3
+      drawBox(102,34,102,34) : ink rgb(255,0,0),1
+      center text 320,210,action$+" cancelled!"
+      gosub _pauseSWP : goto _mmenuSWP
+   endif
+endif
+
+if file exist(fname$)=1 then delete file fname$
+if file exist(wname$)=1 then delete file wname$
+if soundoff=0 then play sound 7
+drawBox(102,34,102,34) : ink rgb(0,255,0),1
+center text 320,210,"["+fname$+"] deleted."
+fname$="*none*" : gosub _pauseSWP : goto _mmenuSWP
+return
+
+rem import new pilot
+_importSWP:
+import=1 : if soundoff=0 then play sound 1
+edit=0 : action$="Import pilot" : gosub _viewList
+ink rgb(0,255,255),1
+center text 320,xp+30,"Enter new pilot name (*.sw,0=cancel):"
+inputn(14) : input newfile$
+
+if newfile$="0"
+   if soundoff=0 then play sound 3
+   drawBox(102,34,102,34) : ink rgb(255,0,0),1
+   center text 320,210,action$+" cancelled!"
+   set dir pfolder$
+   gosub _pauseSWP : goto _mmenuSWP
+endif
+
+if right$(newfile$,3)<>".sw"
+   if soundoff=0 then play sound 3
+   drawBox(102,34,102,34) : ink rgb(255,0,0),1
+   center text 320,205,"No file extension!"
+   center text 320,220,"Please enter the (.sw)."
+   set dir pfolder$
+   gosub _pauseSWP : goto _mmenuSWP
+endif
+
+if file exist(newfile$)=1
+   drawBox(102,34,102,34) : ink rgb(255,0,0),1
+   center text 320,210,"Overwrite existing file?"
+   gosub _yesnoSWP
+   if ynflag=0
+      if soundoff=0 then play sound 3
+      drawBox(102,34,102,34) : ink rgb(255,0,0),1
+      center text 320,210,action$+" cancelled!"
+      set dir pfolder$
+      gosub _pauseSWP : goto _mmenuSWP
+   endif
+endif
+
+fname$=f_name$(a) : wname$="weapon."+f_name$(a)
+gosub _load1SWP
+fname$=newfile$ : wname$="weapon."+newfile$
+if file exist(pfolder$+"\"+wname$) then delete file pfolder$+"\"+wname$
+copy file "weapon.sw",pfolder$+"\"+wname$
+set dir pfolder$
+gosub _save1SWP : gosub _pauseSWP : goto _mmenuSWP
+return
+
+rem export a mission
+_exportSWP:
+import=0 : if soundoff=0 then play sound 1
+action$="Export profile" : gosub _viewList
+
+if spacekey()=1
+   if soundoff=0 then play sound 3
+   drawBox(102,34,102,34) : ink rgb(255,0,0),1
+   center text 320,210,action$+" cancelled!"
+   gosub _pauseSWP : goto _mmenuSWP
+endif
+
+if file exist("..\pilot.sw") then delete file "..\pilot.sw"
+if file exist("..\weapon.sw") then delete file "..\weapon.sw"
+copy file f_name$(a),"..\pilot.sw"
+copy file "weapon."+f_name$(a),"..\weapon.sw"
+if soundoff=0 then play sound 7
+drawBox(102,34,102,34) : ink rgb(0,255,0),1
+center text 320,210,"["+f_name$(a)+"] exported."
+gosub _pauseSWP : goto _mmenuSWP
+
+rem help and donate
+_helpSWP:
+if soundoff=0 then play sound 1
+_help1SWP:
+cls : ink rgb(255,255,0),1
+center text 320,175,"(For profiler help please click on the 'Readme' button.)"
+ink rgb(0,255,255),1
+center text 320,205,"If you find this program useful and would like to donate"
+center text 320,220,"a small amount of money to help support my programming"
+center text 320,235,"efforts, goto my website at http://www.facebook/zonemaster60"
+center text 320,250,"and click on the 'PayPal' donate button at the bottom."
+center text 320,265,"Any amount you can afford would be helpful. Thank you!"
+ink rgb(255,255,0),1
+center text 320,295,"(Any one who donates will recieve the full DBC source.)"
+gosub _readmeSWP : gosub _pauseSWP : goto _mmenuSWP
+
+rem quit program
+_quitSWP:
+if soundoff=0 then play sound 1
+if soundoff=0 then play sound 5
+drawBox(102,34,102,34) : ink rgb(0,255,255),1
+center text 320,205,"Exit to OS."
+center text 320,220,"Are you sure?"
+gosub _yesnoSWP
+if ynflag=0 then goto _mmenuSWP
+_quit1SWP:
+for xx=1 to 9
+   delete sound xx
+next xx
+undim f_name$() : undim varSWP$()
+enable escapekey
+end
+
+rem about the program
+_aboutSWP:
+if soundoff=0 then play sound 1
+if soundoff=0 then play sound 8
+drawBox(115,34,115,34) : ink rgb(0,255,255),1
+center text 320,190,"Version "+ver$
+center text 320,205,"David Scouten (ZoneMaster)"
+center text 320,220,"http://www.facebook.com/zonemaster60"
+center text 320,235,"zonemaster@yahoo.com"
+gosub _pauseSWP : goto _mmenuSWP
+
+rem launch Starwraith
+_launchSWP:
+if soundoff=0 then play sound 1
+set dir ".." : directory$="" : commandline$=""
+if file exist("StarWraith.exe")=1 then execute file "StarWraith.exe",commandline$,directory$
+goto _quit1SWP
+
+rem key pause routine
+_pauseSWP:
+do
+
+rem detect and operate buttons
+buttonselected2=0
+if makebutton2(320,455,"Done")>0 then buttonselected2=1
+
+rem detect button selection
+if buttonselected2=1 then goto _endloop
+
+sync : loop
+
+_endloop:
+if soundoff=0 then play sound 4
+return
+
+rem buttons for yes/no input
+_yesnoSWP:
+do
+
+rem detect and operate buttons
+buttonselected2=0
+if makebutton2(215,455,"Yes")>0 then buttonselected2=3
+if makebutton2(425,455,"No")>0 then buttonselected2=4
+
+rem detect button selection
+if buttonselected2=3
+   ynflag=1
+   goto _endloop2
+endif
+
+if buttonselected2=4
+   ynflag=0
+   goto _endloop2
+endif
+
+sync : loop
+
+_endloop2:
+if soundoff=0 then play sound 9
+return
+
+rem load file routine
+_load1SWP:
+
+if file exist(fname$)=0
+   if soundoff=0 then play sound 3
+   drawBox(102,34,102,34) : ink rgb(255,0,0),1
+   center text 320,210,"["+fname$+"] does not exist!"
+   goto _noFile
+endif
+
+fsave$=fname$ : wsave$=wname$
+open to read 1,fname$
+for x1=1 to lcount
+   read string 1,varSWP$(x1)
+next x1
+close file 1
+return
+
+rem save file routine
+_save1SWP:
+
+if file exist(fname$)=1 and edit=0
+   drawBox(102,34,102,34) : ink rgb(255,0,0),1
+   center text 320,210,"Overwrite existing file?"
+   gosub _yesnoSWP
+   if ynflag=0
+      if soundoff=0 then play sound 3
+      drawBox(102,34,102,34) : ink rgb(255,0,0),1
+      center text 320,210,action$+" cancelled!"
+      gosub _pauseSWP : goto _mmenuSWP
+   endif
+endif
+
+if file exist(fname$)=1 then delete file fname$
+open to write 1,fname$
+for x1=1 to lcount
+   write string 1,varSWP$(x1)
+next x1
+
+close file 1
+if soundoff=0 then play sound 7
+drawBox(102,34,102,34) : ink rgb(0,255,0),1
+center text 320,210,"["+fname$+"] saved."
+gosub _pauseSWP
+return
+
+rem view the files list
+_viewList:
+if import=1 and path exist("..") then set dir ".."
+if import=0 and path exist(pfolder$) then set dir pfolder$
+
+cls : ink rgb(255,255,0),1
+center text 320,10,"[Available Pilots/Profiles]"
+
+rem reposition mouse
+posMouse()
+
+do
+
+perform checklist for files
+find first
+f_name$(0) = get file name$()
+
+zp=35 : fcount=0 : selected=0
+for a=1 to checklist quantity()-1
+   find next
+   f_name$(a) = get file name$()
+   if left$(f_name$(a),5)="pilot"
+      if selectfile(320,zp,"["+f_name$(a)+"]")>0 then selected=1
+      if selected=1 then goto _dumploop
+      zp=zp+15 : inc fcount
+      if fcount>=28 then goto _getout
+   else
+   endif
+next a
+
+_getout:
+xp=zp
+ink rgb(0,255,255),1
+center text 320,zp,"Use the mouse to select a file, or press the SPACEBAR to cancel."
+
+if spacekey()=1
+   if soundoff=0 then play sound 3
+   drawBox(102,34,102,34) : ink rgb(255,0,0),1
+   center text 320,210,action$+" cancelled!"
+   gosub _pauseSWP : goto _mmenuSWP
+endif
+
+sync : loop
+
+_dumploop:
+if soundoff=0 then play sound 1
+
+rem reposition mouse cursor
+posMouse()
+
+rem display internal readme file
+_readmeSWP:
+do
+
+rem detect and operate buttons
+buttonselected=0
+if makebutton(320,120,"Readme")>0 then buttonselected=10
+buttonselected2=0
+if makebutton2(320,455,"Done")>0 then buttonselected2=2
+
+rem detect button selection
+if buttonselected=10 then gosub _readtxtSWP
+if buttonselected2=2 then return
+
+sync : loop
+return
+
+rem checks for no profile loaded
+_noMission:
+if right$(fname$,3)<>".sw"
+   if soundoff=0 then play sound 3
+   drawBox(102,34,102,34) : ink rgb(255,0,0),1
+   center text 320,205,"No pilot profile loaded!"
+   center text 320,220,"Please load a profile first."
+   gosub _pauseSWP : goto _mmenuSWP
+endif
+return
+
+rem ******** my program ends here ********
+
+rem makes text scroll
+rem code by Alastair Tovos
+_readtxtSWP:
+if soundoff=0 then play sound 1
+if soundoff=0 then stop sound 2
+if soundoff=0 then loop sound 6
+rem variables
+y=0 : s=0 : b=620
+
+rem scroll bar
+ink rgb(0,255,0),1 : box 0,0,20,100 : get image 1,0,0,20,100
+
+rem main loop
+do
+
+rem get sprite from scroll bar
+sprite 1,b,s,1
+
+rem print stuff
+cls 0 : ink rgb(0,0,255),1 : set cursor 0,y
+
+print "StarWraith Pilot Profiler"
+print "version "+ver$+" by David Scouten"
+ink rgb(0,255,255),1
+print
+print ">>>"
+print
+print "Instructions on installing are simple, install the contents of the"
+print "self-extracting file SWPProfile_Install.exe to your current Starwraith"
+print "folder."
+print
+print "You CAN delete, export, or import a new pilot/profile without having"
+print "to load a profile first."
+print
+print "Profiles are now saved to the profilers "profiles" folder. If you"
+print "want to use your new profiles you simply export them to your"
+print "current Starwraith 3 folder...simple."
+print
+print "Your original 'pilot.sw' is backed-up when the profiler first runs"
+print "so you won't lose your original pilot info."
+print
+ink rgb(255,0,0),1
+print "NOTE 1: Please make sure you enter a file extension (.sw) after the"
+print "        profile name when entering keyboard input."
+print
+print "NOTE 2: The 'save profile' option is quite destructive. If you load"
+print "        a previous profile and select another file to save too, it"
+print "        WILL overwrite it regardless."
+print
+print "NOTE 3: Limit your file names to 18 characters or less. (i.e 14 for"
+print "        the name and 4 for the extension) This is due to the file"
+print "        selection functions limitations :( Good names would be like"
+print "        pilot01.sw, pilot02.sw....etc."
+ink rgb(0,255,255),1
+print
+print ">>>"
+print
+ink rgb(0,0,255),1
+print "zonemaster@yahoo.com"
+print "http://www.facebook.com/zonemaster60"
+print
+print "StarWraith is copyrighted and owned by Shawn Bower"
+print "of StarWraith 3D games."
+print "starwraith3dgames@att.net"
+print "http://www.starwraith.com"
+print
+print "Scrollbar code by Alastair Zotos"
+print "http://www.thegamecreators.com"
+ink rgb(0,255,255),1
+
+rem move scroll bar
+if mousex()>b and mousey()>s and mousey()<s+50 and mouseclick()=1
+   dec s,10 : inc y,10
+endif
+
+if mousex()>b and mousey()>s+25 and mousey()<s+100 and mouseclick()=1
+   inc s,10 : dec y,10
+endif
+
+rem fast move scroll bar
+if mousex()>b and mousey()<s and mouseclick()=1
+   dec s,30 : inc y,30
+endif
+
+if mousex()>b and mousey()>s+100 and mouseclick()=1
+   inc s,30 : dec y,30
+endif
+
+rem update scroll bar
+if s<0 then s=0
+if y>0 then y=0
+if s>380 then s=380
+
+if spacekey()=1 then goto _exitloop
+ink rgb(255,255,0),1 : center text 320,460,"Press the SPACEBAR when ready."
+ink rgb(0,255,255),1
+
+rem end loop
+sync : loop
+
+_exitloop:
+delete sprite 1 : delete image 1
+if soundoff=0 then stop sound 6
+if soundoff=0 then loop sound 2
+if soundoff=0 then play sound 9
+goto _help1SWP

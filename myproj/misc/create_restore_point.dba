@@ -1,0 +1,14 @@
+
+disable escapekey
+rem set sync rate (0 = no limit)
+sync on : sync rate 0
+rem for compatibility
+set emulation on
+
+exefile$="wmic.exe"
+execomm$=" /Namespace:\\root\default Path SystemRestore Call CreateRestorePoint "Manual System Restore Point", 100, 7"
+exedir$="C:\Windows\System32\Wbem"
+waitflag=1
+
+execute file exefile$,execomm$,exedir$,waitflag
+end

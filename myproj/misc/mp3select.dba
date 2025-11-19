@@ -1,0 +1,88 @@
+rem *** by David Scouten ***
+rem assign 100 element array for file names
+dim f_name$(100)
+
+rem view the files list (use goto viewList)
+viewList:
+
+rem set font and text size
+set text font "Arial" : set text size 15
+
+rem clear screen and text white
+cls : ink rgb(255,255,0),1
+
+rem display a list caption
+center text 310,10,"[Available MP3 list]"
+
+rem do loop start
+do
+
+rem perform the list check
+perform checklist for files
+find first
+
+rem get the file names for the list
+f_name$(0) = get file name$()
+
+rem set some initial variables
+zp=35 : selected=0 : loaded=0 : fcount=0
+
+rem build the file list
+for a=1 to checklist quantity()-1
+   find next
+   f_name$(a) = get file name$()
+	if right$(f_name$(a),4)=".mp3"
+		if selectfile(320,zp,"["+str$(a)+"] - ["+f_name$(a)+"]")>0 then selected=1
+		rem file was selected
+		if selected=1
+			loaded=1
+			goto dumploop
+		endif
+		zp=zp+15
+		inc fcount
+		rem only displays the first 25 files
+		if fcount>=25 then goto getout
+	else
+	endif
+next a
+
+rem cancel file select
+getout:
+xp=zp
+ink rgb(0,255,255),1
+center text 320,zp,"Use the mouse to select a file, or press the F1 to cancel."
+
+if scancode()=59
+	loaded=0
+	goto dumploop
+endif
+
+rem sync screen and end loop
+sync : loop
+
+dumploop:
+rem *** put your file handling code here ***
+if loaded=1 then load music f_name$(a),1
+if loaded=1 then play music 1
+suspend for key
+
+rem end program
+if loaded=1 then delete music 1
+undim f_name$()
+end
+
+rem select file function
+function selectfile(x,y,infname$)
+	selected=0
+	ink rgb(0,0,255),0
+	myx=mousex() : myy=mousey()
+	if myx>x-100 and myx<x+100
+		if myy>y-8 and myy<y+8
+			selected=1
+		endif
+	endif
+	if selected=1 then ink rgb(0,255,255),0
+	set text size 15 : center text x,y-8,infname$
+	if mouseclick()=0 then selected=0
+endfunction selected
+
