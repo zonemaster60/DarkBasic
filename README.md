@@ -11,3 +11,7 @@ If you wish to compile these source files you will need to locate and download D
 https://underwaredesign.com/forums/index.php?topic=4626.0
 OR
 https://archive.org/details/904_20210704
+
+*** Please note: That despite the fact GitHub says it's the Sway Language it definitely is NOT. ***
+
+This is sway -> https://www.swaylang.org/
