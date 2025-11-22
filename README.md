@@ -8,9 +8,7 @@ For compatibility in Windows 11, please right-click the compiled EXE and make su
 'Run in 640 x 480 screen resolution'
 
 If you wish to compile these source files you will need to locate and download DarkBasic v1.14 (current)
-https://underwaredesign.com/forums/index.php?topic=4626.0
-OR
-https://archive.org/details/904_20210704
+https://archive.org/download/dark-basic-setup/Dark%20Basic%20%2B%20Setup.zip
 
 *** Please note: That despite the fact GitHub says it's the Sway Language it definitely is NOT. ***
 
